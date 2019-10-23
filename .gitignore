@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+xnet.py
+*.swp
 
 # C extensions
 *.so
