@@ -129,7 +129,7 @@ def load_areas(outdir):
     return allareas
 
 ##########################################################
-def plot_distributions(allareas, epsilon):
+def plot_distributions(allareas, epsilon, outdir):
     """Plot distributions for each array of areas
 
     Args:
@@ -138,34 +138,34 @@ def plot_distributions(allareas, epsilon):
     """
 
     import plotly.graph_objects as go
-    fig = go.Figure()
-
+    import plotly
+    figs = {}
+    for k in ['hist', 'hist500k', 'boxplot']:
+        figs[k] = go.Figure()
 
     # patches = []
     # fig = go.Figure(data=[go.Histogram(x=areas[validind], nbinsx=500)])
+
     for k, areas in allareas.items():
         errorsind = areas < epsilon
         validind = areas > epsilon
-        fig.add_trace(go.Histogram(x=areas[validind], nbinsx=500, histnorm='probability'))
-        # break
 
-        # fig.add_trace(go.Box(y=areas[validind]))
+        figs['hist'].add_trace(go.Histogram(x=areas[validind], histnorm='probability',
+                                   # nbinsx=500,
+                                   xbins=dict(size=1000000)
+                                   ))
+        figs['hist500k'].add_trace(go.Histogram(x=areas[areas<500000], histnorm='probability',
+                                   # nbinsx=500,
+                                   # xbins=dict(size=1000000)
+                                   ))
+        figs['boxplot'].add_trace(go.Box(y=areas[validind]))
 
-        # Plot scatter alltogether
-        # fig = go.Figure(data=[go.Box(y=areas[validind],
-                                     # boxpoints='all', # can also be outliers, or suspectedoutliers, or False
-                                     # jitter=0.3, # add some jitter for a better separation between points
-                                     # pointpos=-1.8 # relative position of points wrt box
-                                     # )])
-
-
-
-        # fig = go.Figure()
-        # fig.add_trace(go.Scatter(y=areas[validind],
-                                 # mode='lines',
-                                 # name='lines'))
-    fig.show()
-
+    # figs['hist'].update_layout(barmode='overlay')
+    figs['hist'].update_traces(opacity=0.75)
+    plotly.offline.plot(figs['hist'], filename=pjoin(outdir, 'hist.html'), auto_open=False)
+    plotly.offline.plot(figs['hist500k'], filename=pjoin(outdir, 'hist500k.html'), auto_open=False)
+    plotly.offline.plot(figs['boxplot'], filename=pjoin(outdir, 'boxplot.html'), auto_open=False)
+    # py.plot(data, filename='basic_line', auto_open=False)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -183,7 +183,7 @@ def main():
         dump_areas(allareas, args.outdir)
 
     allareas = load_areas(args.outdir)
-    plot_distributions(allareas, epsilon)
+    plot_distributions(allareas, epsilon, args.outdir)
 if __name__ == "__main__":
     main()
 
