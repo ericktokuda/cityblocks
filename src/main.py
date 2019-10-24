@@ -10,6 +10,14 @@ from logging import debug, info
 import numpy as np
 import igraph
 import networkx as nx
+import matplotlib.pyplot as plt
+
+# for function calculate_real_area
+import pyproj
+import shapely
+import shapely.ops as ops
+from shapely.geometry.polygon import Polygon
+from functools import partial
 
 def xnet2igraph_batch(xnetdir):
     """Convert dir containing xnet graphs
@@ -34,45 +42,88 @@ def xnet2igraph_batch(xnetdir):
 def polyarea(x,y):
     return 0.5*np.abs(np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)))
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('graphsdir', help='Graphs directory')
-    args = parser.parse_args()
+def calculate_real_area(coords):
+    try:
+        geom = Polygon(coords)
+        geom_area = ops.transform(
+            partial(
+                pyproj.transform,
+                pyproj.Proj(init='EPSG:4326'),
+                pyproj.Proj(
+                    proj='aea',
+                    lat1=geom.bounds[1],
+                    lat2=geom.bounds[3])),
+            geom)
+        return geom_area.area
+    except Exception as e:
+        return -1 # Invalid polygon
+############################################################
+def compute_block_areas(graphsdir, epsilon=0.00000001):
+    """Calculate block areas from each graph in @graphsdir
 
-    logging.basicConfig(format='[%(asctime)s] %(message)s',
-    datefmt='%Y%m%d %H:%M', level=logging.DEBUG)
+    Args:
+    graphsdir(str): path to the dir containing the graphml files
 
-    for filepath in os.listdir(args.graphsdir):
-        g = nx.read_graphml(pjoin(args.graphsdir, filepath))
+    Returns:
+    dict: game of original file as key and areas as values
+    """
+
+    info('Reading directory {} ...'.format(graphsdir))
+    allareas = {}
+    for filepath in os.listdir(graphsdir):
+        info('Reading file {} ...'.format(filepath))
+        g = nx.read_graphml(pjoin(graphsdir, filepath))
         cycles = nx.cycle_basis(g)
-        for cycle in cycles:
+        ncycles = len(cycles)
+        info('Cycles found: {}'.format(ncycles))
+        areas = np.ndarray(ncycles, dtype=float)
+        for j, cycle in enumerate(cycles):
             n = len(cycle)
             coords = np.ndarray((n, 2), dtype=float)
             for i, nodeid in enumerate(cycle):
-                coords[i, 0] = g.node[nodeid]['posx']
-                coords[i, 1] = g.node[nodeid]['posy']
-            # area = polyarea(coords[:, 0], coords[:, 1])
-            # print(area)
+                coords[i] = np.array([g.node[nodeid]['posx'], g.node[nodeid]['posy']])
 
-            import pyproj
-            import shapely
-            import shapely.ops as ops
-            from shapely.geometry.polygon import Polygon
-            from functools import partial
+            areas[j] = calculate_real_area(coords)
+            # res = polyarea(coords[:, 0], coords[:, 1])
 
-            geom = Polygon(coords)
-            geom_area = ops.transform(
-                partial(
-                    pyproj.transform,
-                    pyproj.Proj(init='EPSG:4326'),
-                    pyproj.Proj(
-                        proj='aea',
-                        lat1=geom.bounds[1],
-                        lat2=geom.bounds[3])),
-                geom)
 
-            print(geom_area.area)
-    
+        errorsind = areas < epsilon
+        validind = areas > epsilon
+        info('Number of valid {}, invalid {}'.format(np.sum(validind), np.sum(errorsind)))
+        info('Block areas mean {:4f} ± {:4f}'.format(np.mean(areas[validind]),
+                                                             np.std(areas[validind])))
+
+        allareas[os.path.splitext(filepath)[0]] = areas
+    return allareas
+##########################################################
+def dump_areas(allareas, outdir):
+    """Dump @areas in outdir
+
+    Args:
+    areas(dict): filename (without ext) as keys and areas as values
+    outdir(str): output directory
+    """
+
+    for filename, areas in allareas.items():
+        outpath = pjoin(outdir, filename + '.csv')
+        np.savetxt(outpath, areas, delimiter=',',
+                   header='aream2', comments='')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('graphsdir', help='Graphs directory')
+    parser.add_argument('--outdir', default='/tmp/', help='Output directory')
+    args = parser.parse_args()
+
+    logging.basicConfig(format='[%(asctime)s] %(message)s',
+    datefmt='%Y%m%d %H:%M', level=logging.INFO)
+    epsilon = 0.00000001 # In m2
+
+    if not os.path.exists(args.outdir):
+        os.makedirs(args.outdir)
+        allareas = compute_block_areas(args.graphsdir, epsilon)
+        dump_areas(allareas, args.outdir)
 
 if __name__ == "__main__":
     main()
