@@ -109,6 +109,24 @@ def dump_areas(allareas, outdir):
         np.savetxt(outpath, areas, delimiter=',',
                    header='aream2', comments='')
 
+##########################################################
+def load_areas(outdir):
+    """Load @areas from @outdir
+
+    Args:
+    allareas(dict): filename (without ext) as keys and areas as values
+    outdir(str): output directory
+    """
+
+    allareas = {}
+    for f in os.listdir(outdir):
+        if not f.endswith('.csv'): continue
+
+        k = os.path.splitext(f)[0]
+        csvpath = pjoin(outdir, f)
+        allareas[k] = np.loadtxt(csvpath, dtype=float, skiprows=1)
+
+    return allareas
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -125,6 +143,7 @@ def main():
         allareas = compute_block_areas(args.graphsdir, epsilon)
         dump_areas(allareas, args.outdir)
 
+    allareas = load_areas(args.outdir)
 if __name__ == "__main__":
     main()
 
