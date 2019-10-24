@@ -128,6 +128,45 @@ def load_areas(outdir):
 
     return allareas
 
+##########################################################
+def plot_distributions(allareas, epsilon):
+    """Plot distributions for each array of areas
+
+    Args:
+    allareas(dict): filename as key and areas as values
+    epsilon(float): value to consider as invalid area
+    """
+
+    import plotly.graph_objects as go
+    fig = go.Figure()
+
+
+    # patches = []
+    # fig = go.Figure(data=[go.Histogram(x=areas[validind], nbinsx=500)])
+    for k, areas in allareas.items():
+        errorsind = areas < epsilon
+        validind = areas > epsilon
+        fig.add_trace(go.Histogram(x=areas[validind], nbinsx=500, histnorm='probability'))
+        # break
+
+        # fig.add_trace(go.Box(y=areas[validind]))
+
+        # Plot scatter alltogether
+        # fig = go.Figure(data=[go.Box(y=areas[validind],
+                                     # boxpoints='all', # can also be outliers, or suspectedoutliers, or False
+                                     # jitter=0.3, # add some jitter for a better separation between points
+                                     # pointpos=-1.8 # relative position of points wrt box
+                                     # )])
+
+
+
+        # fig = go.Figure()
+        # fig.add_trace(go.Scatter(y=areas[validind],
+                                 # mode='lines',
+                                 # name='lines'))
+    fig.show()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('graphsdir', help='Graphs directory')
@@ -144,6 +183,7 @@ def main():
         dump_areas(allareas, args.outdir)
 
     allareas = load_areas(args.outdir)
+    plot_distributions(allareas, epsilon)
 if __name__ == "__main__":
     main()
 
