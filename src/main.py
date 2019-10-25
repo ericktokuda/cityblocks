@@ -19,6 +19,8 @@ import shapely.ops as ops
 from shapely.geometry.polygon import Polygon
 from functools import partial
 
+MAX = 999999999
+
 def xnet2igraph_batch(xnetdir):
     """Convert dir containing xnet graphs
 
@@ -58,7 +60,7 @@ def calculate_real_area(coords):
     except Exception as e:
         return -1 # Invalid polygon
 ############################################################
-def compute_block_areas(graphsdir, epsilon=0.00000001):
+def compute_block_areas(graphsdir, outdir, epsilon=0.00000001):
     """Calculate block areas from each graph in @graphsdir
 
     Args:
@@ -68,15 +70,34 @@ def compute_block_areas(graphsdir, epsilon=0.00000001):
     dict: game of original file as key and areas as values
     """
 
+    from matplotlib.collections import PatchCollection
+    from matplotlib.patches import Polygon
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(1, 1)
+
     info('Reading directory {} ...'.format(graphsdir))
     allareas = {}
     for filepath in os.listdir(graphsdir):
         info('Reading file {} ...'.format(filepath))
         g = nx.read_graphml(pjoin(graphsdir, filepath))
+        g = g.to_undirected()
         cycles = nx.cycle_basis(g)
         ncycles = len(cycles)
         info('Cycles found: {}'.format(ncycles))
         areas = np.ndarray(ncycles, dtype=float)
+        patches= []
+
+        coordsmin = np.array([MAX, MAX], dtype=float)
+        coordsmax = np.array([-MAX, -MAX], dtype=float)
+
+        for cycle in cycles:
+            for nodeid in cycle:
+                aux = np.array([g.node[nodeid]['posx'], g.node[nodeid]['posy']])
+                if aux[0] < coordsmin[0]: coordsmin[0] = aux[0]
+                if aux[1] < coordsmin[1]: coordsmin[1] = aux[1]
+                if aux[0] > coordsmax[0]: coordsmax[0] = aux[0]
+                if aux[1] > coordsmax[1]: coordsmax[1] = aux[1]
+
         for j, cycle in enumerate(cycles):
             n = len(cycle)
             coords = np.ndarray((n, 2), dtype=float)
@@ -84,16 +105,36 @@ def compute_block_areas(graphsdir, epsilon=0.00000001):
                 coords[i] = np.array([g.node[nodeid]['posx'], g.node[nodeid]['posy']])
 
             areas[j] = calculate_real_area(coords)
-            # res = polyarea(coords[:, 0], coords[:, 1])
 
+            coords = (coords - coordsmin) / (coordsmax-coordsmin)
+
+            if areas[j] > epsilon:
+                patches.append(Polygon(coords))
+                f = coords
+
+        p = PatchCollection(patches, alpha=0.1)
+        colors = 100*np.random.rand(len(patches))
+        p.set_array(np.array(colors))
+        ax.add_collection(p)
+        filename = os.path.splitext(filepath)[0]
+        ax.set_title(filename)
+        xticks = np.array(ax.get_xticks())
+        yticks = np.array(ax.get_yticks())
+        ticksrange = np.array([xticks[-1] - xticks[0], yticks[-1] - yticks[0]],
+                              dtype=float)
+        coordsrange = coordsmax - coordsmin
+        factor = coordsrange / ticksrange
+        xticks_new = xticks
+        ax.set_xticklabels((xticks-xticks[0])*factor[0] + coordsmin[0])
+        ax.set_yticklabels((xticks-xticks[0])*factor[1] + coordsmin[1])
+        outvispath = pjoin(outdir,  filename + '.pdf')
+        plt.savefig(outvispath)
 
         errorsind = areas < epsilon
         validind = areas > epsilon
         info('Number of valid {}, invalid {}'.format(np.sum(validind), np.sum(errorsind)))
         info('Block areas mean {:4f} ± {:4f}'.format(np.mean(areas[validind]),
                                                              np.std(areas[validind])))
-
-        allareas[os.path.splitext(filepath)[0]] = areas
     return allareas
 ##########################################################
 def dump_areas(allareas, outdir):
@@ -175,15 +216,19 @@ def main():
 
     logging.basicConfig(format='[%(asctime)s] %(message)s',
     datefmt='%Y%m%d %H:%M', level=logging.INFO)
-    epsilon = 0.00000001 # In m2
+    # epsilon = 0.00000001 # In m2
+    epsilon = 0.01 # In m2
 
-    if not os.path.exists(args.outdir):
-        os.makedirs(args.outdir)
-        allareas = compute_block_areas(args.graphsdir, epsilon)
+    # if not os.path.exists(args.outdir):
+    if True:
+        os.makedirs(args.outdir, exist_ok=True)
+        allareas = compute_block_areas(args.graphsdir, args.outdir, epsilon)
         dump_areas(allareas, args.outdir)
 
+    return
     allareas = load_areas(args.outdir)
     plot_distributions(allareas, epsilon, args.outdir)
+
 if __name__ == "__main__":
     main()
 
