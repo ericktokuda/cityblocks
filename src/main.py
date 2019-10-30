@@ -20,6 +20,9 @@ import shapely
 import shapely.ops as ops
 from shapely.geometry.polygon import Polygon
 from functools import partial
+import plotly.graph_objects as go
+import plotly
+from scipy import stats
 
 MAX = 999999999
 
@@ -62,97 +65,6 @@ def calculate_real_area(coords):
         return geom_area.area
     except Exception as e:
         return -1 # Invalid polygon
-############################################################
-def compute_block_areas(graphsdir, outdir, epsilon=0.00000001):
-    """Calculate block areas from each graph in @graphsdir
-
-    Args:
-    graphsdir(str): path to the dir containing the graphml files
-
-    Returns:
-    dict: game of original file as key and areas as values
-    """
-
-    from matplotlib.collections import PatchCollection
-    from matplotlib.patches import Polygon
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(1, 1)
-
-    info('Reading directory {} ...'.format(graphsdir))
-    allareas = {}
-    for filepath in os.listdir(graphsdir):
-        info('Reading file {} ...'.format(filepath))
-        g = nx.read_graphml(pjoin(graphsdir, filepath))
-        g = g.to_undirected()
-        cycles = nx.cycle_basis(g)
-        ncycles = len(cycles)
-        info('Cycles found: {}'.format(ncycles))
-        areas = np.ndarray(ncycles, dtype=float)
-        # patches= []
-
-        # coordsmin = np.array([MAX, MAX], dtype=float)
-        # coordsmax = np.array([-MAX, -MAX], dtype=float)
-
-        # for cycle in cycles:
-            # for nodeid in cycle:
-                # aux = np.array([g.node[nodeid]['posx'], g.node[nodeid]['posy']])
-                # if aux[0] < coordsmin[0]: coordsmin[0] = aux[0]
-                # if aux[1] < coordsmin[1]: coordsmin[1] = aux[1]
-                # if aux[0] > coordsmax[0]: coordsmax[0] = aux[0]
-                # if aux[1] > coordsmax[1]: coordsmax[1] = aux[1]
-
-        for j, cycle in enumerate(cycles):
-            n = len(cycle)
-            coords = np.ndarray((n, 2), dtype=float)
-            for i, nodeid in enumerate(cycle):
-                coords[i] = np.array([g.node[nodeid]['posx'], g.node[nodeid]['posy']])
-
-            areas[j] = calculate_real_area(coords)
-
-            # coords = (coords - coordsmin) / (coordsmax-coordsmin)
-
-            # if areas[j] > epsilon:
-                # patches.append(Polygon(coords))
-                # f = coords
-
-        # p = PatchCollection(patches, alpha=0.1)
-        # colors = 100*np.random.rand(len(patches))
-        # p.set_array(np.array(colors))
-        # ax.add_collection(p)
-        # filename = os.path.splitext(filepath)[0]
-        # ax.set_title(filename)
-        # xticks = np.array(ax.get_xticks())
-        # yticks = np.array(ax.get_yticks())
-        # ticksrange = np.array([xticks[-1] - xticks[0], yticks[-1] - yticks[0]],
-                              # dtype=float)
-        # coordsrange = coordsmax - coordsmin
-        # factor = coordsrange / ticksrange
-        # xticks_new = xticks
-        # ax.set_xticklabels((xticks-xticks[0])*factor[0] + coordsmin[0])
-        # ax.set_yticklabels((xticks-xticks[0])*factor[1] + coordsmin[1])
-        # outvispath = pjoin(outdir,  filename + '.pdf')
-        # plt.savefig(outvispath)
-
-        errorsind = areas < epsilon
-        validind = areas > epsilon
-        info('Number of valid {}, invalid {}'.format(np.sum(validind), np.sum(errorsind)))
-        info('Block areas mean {:4f} ± {:4f}'.format(np.mean(areas[validind]),
-                                                             np.std(areas[validind])))
-        allareas[os.path.splitext(filepath)[0]] = areas
-    return allareas
-##########################################################
-def dump_areas(allareas, outdir):
-    """Dump @areas in outdir
-
-    Args:
-    areas(dict): filename (without ext) as keys and areas as values
-    outdir(str): output directory
-    """
-
-    for filename, areas in allareas.items():
-        outpath = pjoin(outdir, filename + '.csv')
-        np.savetxt(outpath, areas, delimiter=',',
-                   header='aream2', comments='')
 
 ##########################################################
 def load_areas(outdir):
@@ -174,7 +86,7 @@ def load_areas(outdir):
     return allareas
 
 ##########################################################
-def plot_distributions(allareas, epsilon, outdir):
+def plot_distributions(allareas, outdir):
     """Plot distributions for each array of areas
 
     Args:
@@ -182,18 +94,13 @@ def plot_distributions(allareas, epsilon, outdir):
     epsilon(float): value to consider as invalid area
     """
 
-    import plotly.graph_objects as go
-    import plotly
-    from scipy import stats
     figs = {}
     for k in ['hist', 'boxplot']:
         figs[k] = go.Figure()
 
     for k, areas in allareas.items():
-        errorsind = areas < epsilon
-        validind = areas > epsilon
         figs['hist'].add_trace(
-                go.Histogram(x=stats.zscore(areas[validind]),
+                go.Histogram(x=stats.zscore(areas),
                     histnorm='probability',
                     name=k,
                     # nbinsx=500,
@@ -201,7 +108,7 @@ def plot_distributions(allareas, epsilon, outdir):
                     xbins=dict(size=.1)
                     ))
         figs['boxplot'].add_trace(
-                go.Box(y=areas[validind],
+                go.Box(y=areas,
                     name=k,
             ))
 
@@ -222,7 +129,7 @@ def plot_graph_raster(graphsdir, skeldir):
     figfactor = 10000
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
-        info(filepath)
+        info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
         lonrange = [np.min(g.vs['posx']), np.max(g.vs['posx'])]
         latrange = [np.min(g.vs['posy']), np.max(g.vs['posy'])]
@@ -256,7 +163,6 @@ def colorize(labels):
     return labeled_img
 
 ##########################################################
-
 def get_components_from_raster(rasterdir, compdir):
     if os.path.exists(compdir):
         info('{} already exists. Skipping ...'.format(compdir))
@@ -269,7 +175,7 @@ def get_components_from_raster(rasterdir, compdir):
 
     for filepath in os.listdir(rasterdir):
         if not filepath.endswith('.png'): continue
-        info(filepath)
+        info(' *' + filepath)
         imgpath = pjoin(rasterdir, filepath)
         img = cv2.imread(imgpath, 0)
         img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)[1]
@@ -287,6 +193,7 @@ def generate_components_vis(components, compdir):
     info('Generating components visualization ...')
 
     for k, labels in components.items():
+        info(' *' + k)
         labeled_img = colorize(labels)
         outpath = pjoin(compdir, k + '_labels.png')
         cv2.imwrite(outpath, labeled_img)
@@ -303,13 +210,10 @@ def calculate_block_areas(labels, outdir):
 
     areas = {}
     for k, label in labels.items():
-        info(k)
-
-        ulabels = np.unique(label)
-        areas[k] = np.ndarray(len(ulabels), dtype=int)
-
-        for j, ulabel in enumerate(ulabels):
-            areas[k][j] = np.sum(np.where(label == ulabel))
+        info(' *' + k)
+        ulabels, area = np.unique(label, return_counts=True)
+        areas[k] = np.array(area)
+        # print(k, areas[k])
 
     pkl.dump(areas, open(outpath, 'wb'))
     return areas
@@ -318,8 +222,43 @@ def filter_areas(areas):
     for k, v in areas.items():
         areas[k] = v[2:]
     return areas
-##########################################################
 
+##########################################################
+def compute_statistics(allareas, outdir):
+    """Compute statistics from areas
+
+    Args:
+    areas(dict): city as keys and list of areas as values
+    """
+
+    fh = open(pjoin(outdir, 'summary.csv'), 'w')
+    fh.write('city,nblocks,mean,std,cv,min,max\n')
+
+    for k, areas in allareas.items():
+        f = areas[2:] # 0: skeleton, 1: background
+        st = [k, len(f), np.mean(f), np.std(f), np.std(f)/np.mean(f),
+                np.min(f), np.max(f)
+                ]
+        fh.write(','.join([ str(s) for s in st]) + '\n')
+
+def generate_test_graphs(outdir):
+    sz = 20 
+    g = igraph.Graph.Lattice([sz, sz], circular=False) # lattice
+    coords = np.array(g.layout('grid').coords)
+    _range = (np.max(coords, 0) - np.min(coords, 0)) * 10
+    g.vs['posx'] = coords[:, 0] / _range[0]
+    g.vs['posy'] = coords[:, 1] / _range[1]
+    outfilename = pjoin(outdir, 'lattice.graphml')
+    igraph.write(g, outfilename, 'graphml')
+
+    g = igraph.Graph.Erdos_Renyi(60, p=1) # lattice
+    coords = np.array(g.layout('random').coords)
+    _range = (np.max(coords, 0) - np.min(coords, 0)) * 10
+    g.vs['posx'] = coords[:, 0] / _range[0]
+    g.vs['posy'] = coords[:, 1] / _range[1]
+    outfilename = pjoin(outdir, 'erdos.graphml')
+    igraph.write(g, outfilename, 'graphml')
+##########################################################
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('graphsdir', help='Graphs directory')
@@ -328,25 +267,20 @@ def main():
 
     logging.basicConfig(format='[%(asctime)s] %(message)s',
     datefmt='%Y%m%d %H:%M', level=logging.INFO)
-    epsilon = 0.01 # In m2
-
-    # if not os.path.exists(args.outdir):
-        # os.makedirs(args.outdir, exist_ok=True)
-        # allareas = compute_block_areas(args.graphsdir, args.outdir, epsilon)
-        # dump_areas(allareas, args.outdir)
-
-    # allareas = load_areas(args.outdir)
-    # plot_distributions(allareas, epsilon, args.outdir)
 
     skeldir = pjoin(args.outdir, 'skel')
     compdir = pjoin(args.outdir, 'comp')
 
+    # generate_test_graphs(args.graphsdir)
+
     plot_graph_raster(args.graphsdir, skeldir)
     components = get_components_from_raster(skeldir, compdir)
-    # generate_components_vis(components, compdir)
-    areas = calculate_block_areas(components, args.outdir)
-    areas = filter_areas(areas) # 0: skeleton, 1: background
-    plot_distributions(areas, epsilon, args.outdir)
+    generate_components_vis(components, compdir)
+    allareas = calculate_block_areas(components, args.outdir)
+    compute_statistics(allareas, args.outdir)
+
+    filteredareas = filter_areas(allareas) # 0: skeleton, 1: background
+    plot_distributions(filteredareas, args.outdir)
 
 if __name__ == "__main__":
     main()
