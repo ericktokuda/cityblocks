@@ -22,10 +22,12 @@ from shapely.geometry.polygon import Polygon
 from functools import partial
 import plotly.graph_objects as go
 import plotly
+from haversine import haversine
 from scipy import stats
 
 MAX = 999999999
 
+##########################################################
 def xnet2igraph_batch(xnetdir):
     """Convert dir containing xnet graphs
 
@@ -46,10 +48,12 @@ def xnet2igraph_batch(xnetdir):
         acc += 1
     info('Sucessfully converted {} xnet files.'.format(acc))
 
+##########################################################
 def polyarea(x,y):
     return 0.5*np.abs(np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)))
 
-def calculate_real_area(coords):
+##########################################################
+def calculate_real_area(coords, unit='km'):
     # https://gis.stackexchange.com/questions/127607/area-in-km-from-polygon-of-coordinates
     try:
         geom = Polygon(coords)
@@ -62,7 +66,9 @@ def calculate_real_area(coords):
                     lat1=geom.bounds[1],
                     lat2=geom.bounds[3])),
             geom)
-        return geom_area.area
+        if unit == 'km': factor = 1000000
+        else: factor = 1
+        return geom_area.area / factor
     except Exception as e:
         return -1 # Invalid polygon
 
@@ -156,7 +162,6 @@ def colorize(labels):
 
     labeled_img = np.zeros((labels.shape[0], labels.shape[1], 3), dtype=np.uint8)
     for i, lab in enumerate(ulabels[1:]): # 0: skeleton, 2: external part
-        # print(lab)
         z = np.where(labels == lab)
         labeled_img[z] = _colors[i]
 
@@ -204,25 +209,46 @@ def generate_components_vis(components, compdir):
         cv2.imwrite(outpath, labeled_img)
 
 ##########################################################
-def calculate_block_areas(labels, outdir):
-    outpath = pjoin(outdir, 'areas.pkl')
+def compute_raster_real_conversion(rasterranges, lonlatranges):
+    conversionfactors = {}
+    for k, c in lonlatranges.items():
+        coords = np.array([ [c[0], c[1]], [c[0], c[3]], [c[2], c[3]], [c[2], c[1]], ])
+        real = calculate_real_area(coords)
+        r = rasterranges[k]
+        raster = (r[2] - r[0]) * (r[3] - r[1])
+        conversionfactors[k] = real/raster
+    return conversionfactors
 
+##########################################################
+def calculate_block_areas(labels, lonlatranges, outdir):
+    outpath = pjoin(outdir, 'areas.pkl')
     if os.path.exists(outpath):
         info('{} already exists. Skipping ...'.format(outpath))
         return pkl.load(open(outpath, 'rb'))
 
+    areas, rasterranges = calculate_raster_areas(labels, outdir)
+    conversionfactors = compute_raster_real_conversion(rasterranges, lonlatranges)
+
+    for k in areas.keys():
+        areas[k] = areas[k] * conversionfactors[k]
+    pkl.dump(areas, open(outpath, 'wb'))
+
+##########################################################
+def calculate_raster_areas(labels, outdir):
     info('Computing block areas from components ...')
 
     areas = {}
+    ranges = {}
     for k, label in labels.items():
         info(' *' + k)
         ulabels, area = np.unique(label, return_counts=True)
         areas[k] = np.array(area)
-        # print(k, areas[k])
+        skelids = np.where(label == 1) # 1: skeleton (cv2)
+        ranges[k] = np.array([ np.min(skelids[0]),  np.min(skelids[1]),
+            np.max(skelids[0]), np.max(skelids[1]) ])
+    return areas, ranges
 
-    pkl.dump(areas, open(outpath, 'wb'))
-    return areas
-
+##########################################################
 def filter_areas(areas):
     for k, v in areas.items():
         areas[k] = v[2:]
@@ -232,6 +258,7 @@ def filter_areas(areas):
 def compute_graph_statistics(graphsdir):
     info('Computing graph statistics ...')
     avgdists = {}
+    avgwdists = {}
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
 
@@ -239,17 +266,22 @@ def compute_graph_statistics(graphsdir):
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
         d = np.array(g.shortest_paths())
+        wd = np.array(g.shortest_paths(weights=g.es['weight']))
         nvertices = len(g.vs)
 
         avgdist = 0.0
+        avgwdist = 0.0
         ndists = (nvertices * (nvertices-1)) / 2
 
         for i in range(nvertices):
             for j in range(i+1, nvertices):
                 avgdist += d[i, j] / ndists
+                avgwdist += d[i, j] / ndists
         avgdists[k] = avgdist
-    return avgdists
+        avgwdists[k] = avgwdist
+    return avgdists, avgwdists
 
+##########################################################
 def compute_statistics(graphsdir, allareas, outdir):
     """Compute statistics from areas
 
@@ -261,18 +293,22 @@ def compute_statistics(graphsdir, allareas, outdir):
         info('{} already exists. Skipping ...'.format(outpath))
         return
 
-
     fh = open(outpath, 'w')
-    fh.write('city,nblocks,mean,std,cv,min,max,meandisttopo\n')
+    fh.write('city,nblocks,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,avgudist,avgwdist\n')
 
-    avgdists = compute_graph_statistics(graphsdir)
+    avgudist, avgwdist = compute_graph_statistics(graphsdir)
     for k, areas in allareas.items():
-        f = areas[2:] # 0: skeleton, 1: background
-        st = [k, len(f), np.mean(f), np.std(f), np.std(f)/np.mean(f),
-                np.min(f), np.max(f), avgdists[k]
+        a = areas[2:] # 0: skeleton, 1: background
+        arel = a / np.sum(a)
+        entropy = arel * np.log(arel)
+        evenness = np.exp(entropy) / len(entropy)
+        
+        st = [k, len(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
+                np.min(a), np.max(a), entropy, evenness, avgudist[k], avgwdist[k]
                 ]
         fh.write(','.join([ str(s) for s in st]) + '\n')
 
+##########################################################
 def generate_test_graphs(outdir):
     sz = 20 
     g = igraph.Graph.Lattice([sz, sz], circular=False) # lattice
@@ -291,6 +327,7 @@ def generate_test_graphs(outdir):
     outfilename = pjoin(outdir, 'erdos.graphml')
     igraph.write(g, outfilename, 'graphml')
 
+##########################################################
 def add_weights_to_edges(graphsdir, weightdir):
     if os.path.exists(weightdir):
         info('{} already exists. Skipping ...'.format(weightdir))
@@ -302,11 +339,26 @@ def add_weights_to_edges(graphsdir, weightdir):
         outpath = pjoin(weightdir, filepath)
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        if 'lattice' in filepath: continue
         for e in g.es:
-            coordu = np.array([ g.vs[e.source]['posx'], g.vs[e.source]['posy'] ])
-            coordv = np.array([ g.vs[e.target]['posx'], g.vs[e.target]['posy'] ])
-            e['weight'] = np.linalg.norm(coordu - coordv, ord=2)
+            coordu = np.array([ g.vs[e.source]['posy'], g.vs[e.source]['posx'] ])
+            coordv = np.array([ g.vs[e.target]['posy'], g.vs[e.target]['posx'] ])
+            e['weight'] = haversine(coordu, coordv, unit='km') # in meters
         igraph.write(g, outpath, 'graphml')
+
+##########################################################
+def get_maps_ranges(graphsdir):
+    info('Getting map ranges ...')
+    ranges = {}
+    for filepath in os.listdir(graphsdir):
+        k = os.path.splitext(filepath)[0]
+        if not filepath.endswith('.graphml'): continue
+        info(' *' + filepath)
+        g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        lon = g.vs['posx']
+        lat = g.vs['posy']
+        ranges[k] = np.array([np.min(lon), np.min(lat), np.max(lon), np.max(lat)])
+    return ranges
 
 ##########################################################
 def main():
@@ -323,13 +375,14 @@ def main():
     weightdir = pjoin(args.outdir, 'weighted')
 
     # generate_test_graphs(args.graphsdir)
+
     add_weights_to_edges(args.graphsdir, weightdir)
+    lonlatranges = get_maps_ranges(args.graphsdir)
     plot_graph_raster(args.graphsdir, skeldir)
     components = get_components_from_raster(skeldir, args.outdir)
     generate_components_vis(components, compdir)
-    allareas = calculate_block_areas(components, args.outdir)
-    compute_statistics(args.graphsdir, allareas, args.outdir)
-
+    allareas = calculate_block_areas(components, lonlatranges, args.outdir)
+    compute_statistics(weightdir, allareas, args.outdir)
     filteredareas = filter_areas(allareas) # 0: skeleton, 1: background
     plot_distributions(filteredareas, args.outdir)
 
