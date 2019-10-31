@@ -163,12 +163,12 @@ def colorize(labels):
     return labeled_img
 
 ##########################################################
-def get_components_from_raster(rasterdir, compdir):
-    if os.path.exists(compdir):
-        info('{} already exists. Skipping ...'.format(compdir))
-        return pkl.load(open(pjoin(compdir, 'components.pkl'), 'rb'))
+def get_components_from_raster(rasterdir, outdir):
+    outpath = pjoin(outdir, 'components.pkl')
 
-    os.makedirs(compdir)
+    if os.path.exists(outpath):
+        info('{} already exists. Skipping ...'.format(outdir))
+        return pkl.load(open(outpath, 'rb'))
 
     info('Reading raster graphics from {} ...'.format(rasterdir))
     components = {}
@@ -185,12 +185,17 @@ def get_components_from_raster(rasterdir, compdir):
 
         ret, labels = cv2.connectedComponents(img)
         components[os.path.splitext(filepath)[0]] = labels
-    pkl.dump(components, open(pjoin(compdir, 'components.pkl'), 'wb'))
+    pkl.dump(components, open(outpath, 'wb'))
     return components
 
 ##########################################################
 def generate_components_vis(components, compdir):
     info('Generating components visualization ...')
+    if os.path.exists(compdir):
+        info('{} already exists. Skipping ...'.format(compdir))
+        return
+
+    os.makedirs(compdir)
 
     for k, labels in components.items():
         info(' *' + k)
@@ -224,20 +229,47 @@ def filter_areas(areas):
     return areas
 
 ##########################################################
-def compute_statistics(allareas, outdir):
+def compute_graph_statistics(graphsdir):
+    info('Computing graph statistics ...')
+    avgdists = {}
+    for filepath in os.listdir(graphsdir):
+        if not filepath.endswith('.graphml'): continue
+
+        k = os.path.splitext(filepath)[0]
+        info(' *' + filepath)
+        g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        d = np.array(g.shortest_paths())
+        nvertices = len(g.vs)
+
+        avgdist = 0.0
+        ndists = (nvertices * (nvertices-1)) / 2
+
+        for i in range(nvertices):
+            for j in range(i+1, nvertices):
+                avgdist += d[i, j] / ndists
+        avgdists[k] = avgdist
+    return avgdists
+
+def compute_statistics(graphsdir, allareas, outdir):
     """Compute statistics from areas
 
     Args:
     areas(dict): city as keys and list of areas as values
     """
+    outpath = pjoin(outdir, 'summary.csv')
+    if os.path.exists(outpath):
+        info('{} already exists. Skipping ...'.format(outpath))
+        return
 
-    fh = open(pjoin(outdir, 'summary.csv'), 'w')
-    fh.write('city,nblocks,mean,std,cv,min,max\n')
 
+    fh = open(outpath, 'w')
+    fh.write('city,nblocks,mean,std,cv,min,max,meandisttopo\n')
+
+    avgdists = compute_graph_statistics(graphsdir)
     for k, areas in allareas.items():
         f = areas[2:] # 0: skeleton, 1: background
         st = [k, len(f), np.mean(f), np.std(f), np.std(f)/np.mean(f),
-                np.min(f), np.max(f)
+                np.min(f), np.max(f), avgdists[k]
                 ]
         fh.write(','.join([ str(s) for s in st]) + '\n')
 
@@ -258,6 +290,24 @@ def generate_test_graphs(outdir):
     g.vs['posy'] = coords[:, 1] / _range[1]
     outfilename = pjoin(outdir, 'erdos.graphml')
     igraph.write(g, outfilename, 'graphml')
+
+def add_weights_to_edges(graphsdir, weightdir):
+    if os.path.exists(weightdir):
+        info('{} already exists. Skipping ...'.format(weightdir))
+        return
+    os.makedirs(weightdir)
+
+    for filepath in os.listdir(graphsdir):
+        if not filepath.endswith('.graphml'): continue
+        outpath = pjoin(weightdir, filepath)
+        info(' *' + filepath)
+        g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        for e in g.es:
+            coordu = np.array([ g.vs[e.source]['posx'], g.vs[e.source]['posy'] ])
+            coordv = np.array([ g.vs[e.target]['posx'], g.vs[e.target]['posy'] ])
+            e['weight'] = np.linalg.norm(coordu - coordv, ord=2)
+        igraph.write(g, outpath, 'graphml')
+
 ##########################################################
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -270,14 +320,15 @@ def main():
 
     skeldir = pjoin(args.outdir, 'skel')
     compdir = pjoin(args.outdir, 'comp')
+    weightdir = pjoin(args.outdir, 'weighted')
 
     # generate_test_graphs(args.graphsdir)
-
+    add_weights_to_edges(args.graphsdir, weightdir)
     plot_graph_raster(args.graphsdir, skeldir)
-    components = get_components_from_raster(skeldir, compdir)
+    components = get_components_from_raster(skeldir, args.outdir)
     generate_components_vis(components, compdir)
     allareas = calculate_block_areas(components, args.outdir)
-    compute_statistics(allareas, args.outdir)
+    compute_statistics(args.graphsdir, allareas, args.outdir)
 
     filteredareas = filter_areas(allareas) # 0: skeleton, 1: background
     plot_distributions(filteredareas, args.outdir)
