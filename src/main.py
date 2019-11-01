@@ -180,15 +180,15 @@ def plot_distributions(outdir):
     ########################################################## Coefficient of variation
     for _, row in df.iterrows():
         figs['coefvar'].add_trace(go.Scatter(
-            x=[row.areacv],
+            x=[row.areamean/row.areasum],
             y=[row.wdistmean/row.segmean],
             mode='markers',
             marker_size=40,
             name=row.city,
             ))
     figs['coefvar'].update_layout(
-            title="Length of shortest paths X Variation of block sizes",
-            xaxis_title="Coeff of variation of block areas",
+            title="Length of shortest paths X Rel. size of blocks",
+            xaxis_title="Average relative size of blocks",
             yaxis_title="Length of shortest paths normalized by average segment length",
             )
     ########################################################## Save to file
@@ -341,7 +341,8 @@ def compute_graph_statistics(graphsdir):
     udiststd = {}
     wdistmean = {}
     wdiststd = {}
-
+    nvertices = {}
+    nedges = {}
 
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
@@ -376,8 +377,9 @@ def compute_graph_statistics(graphsdir):
         udiststd[k] = ( np.sum(ud2sum) - ((np.sum(udsum)**2)/ndists)) / ndists
         wdistmean[k] = wdsum / ndists
         wdiststd[k] = ( np.sum(wd2sum) - ((np.sum(wdsum)**2)/ndists)) / ndists
-        # print(segmean[k], segstd[k], udistmean[k], udiststd[k], wdistmean[k], wdiststd[k])
-    return segmean, segstd, udistmean, udiststd, wdistmean, wdiststd
+        nvertices[k] = len(g.vs)
+        nedges[k] = len(g.es)
+    return nvertices, nedges, segmean, segstd, udistmean, udiststd, wdistmean, wdiststd
 
 ##########################################################
 def compute_statistics(graphsdir, allareas, outdir):
@@ -392,16 +394,16 @@ def compute_statistics(graphsdir, allareas, outdir):
         return
 
     fh = open(outpath, 'w')
-    fh.write('city,nblocks,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,wdistmean,wdiststd\n')
+    fh.write('city,nblocks,areasum,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,wdistmean,wdiststd\n')
 
-    segmean, segstd, udistmean, udiststd, wdistmean, wdiststd = compute_graph_statistics(graphsdir)
+    nvertices, nedges, segmean, segstd, udistmean, udiststd, wdistmean, wdiststd = compute_graph_statistics(graphsdir)
 
     for k, areas in allareas.items():
         a = areas[2:] # 0: skeleton, 1: background
         arel = a / np.sum(a)
         entropy = -np.sum(arel * np.log(arel))
         evenness = np.exp(entropy) / len(arel)
-        st = [k, len(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
+        st = [k, nvertices[k], nedges[k], len(a), np.sum(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
                 np.min(a), np.max(a), entropy, evenness,
                 segmean[k], segstd[k],
                 udistmean[k], udiststd[k], wdistmean[k], wdiststd[k]
@@ -440,6 +442,7 @@ def add_weights_to_edges(graphsdir, weightdir):
         outpath = pjoin(weightdir, filepath)
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        g.to_undirected()
         for e in g.es:
             coordu = np.array([ g.vs[e.source]['posy'], g.vs[e.source]['posx'] ])
             coordv = np.array([ g.vs[e.target]['posy'], g.vs[e.target]['posx'] ])
@@ -453,7 +456,6 @@ def get_maps_ranges(graphsdir):
     for filepath in os.listdir(graphsdir):
         k = os.path.splitext(filepath)[0]
         if not filepath.endswith('.graphml'): continue
-        info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
         lon = g.vs['posx']
         lat = g.vs['posy']
@@ -477,8 +479,8 @@ def main():
     # generate_test_graphs(args.graphsdir)
 
     add_weights_to_edges(args.graphsdir, weightdir)
-    lonlatranges = get_maps_ranges(args.graphsdir)
-    plot_graph_raster(args.graphsdir, skeldir)
+    lonlatranges = get_maps_ranges(weightdir)
+    plot_graph_raster(weightdir, skeldir)
     components = get_components_from_raster(skeldir, args.outdir)
     generate_components_vis(components, compdir)
     allareas = calculate_block_areas(components, lonlatranges, args.outdir)
