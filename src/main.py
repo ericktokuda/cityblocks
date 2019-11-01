@@ -13,6 +13,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import cv2
 import pickle as pkl
+import pandas as pd
 
 # for function calculate_real_area
 import pyproj
@@ -92,7 +93,7 @@ def load_areas(outdir):
     return allareas
 
 ##########################################################
-def plot_distributions(allareas, outdir):
+def plot_distributions(outdir):
     """Plot distributions for each array of areas
 
     Args:
@@ -101,12 +102,19 @@ def plot_distributions(allareas, outdir):
     """
 
     figs = {}
-    for k in ['hist', 'boxplot']:
+    for k in ['hist', 'boxplot', 'entropy', 'evenness', 'entropyz', 'coefvar']:
         figs[k] = go.Figure()
+
+    ########################################################## Area plots
+    areaspath = pjoin(outdir, 'areas.pkl')
+    allareas = pkl.load(open(areaspath, 'rb'))
+    allareas = filter_areas(allareas) # 0: skeleton, 1: background
+
 
     for k, areas in allareas.items():
         figs['hist'].add_trace(
-                go.Histogram(x=stats.zscore(areas),
+                # go.Histogram(x=stats.zscore(areas),
+                go.Histogram(x=areas,
                     histnorm='probability',
                     name=k,
                     # nbinsx=500,
@@ -119,8 +127,77 @@ def plot_distributions(allareas, outdir):
             ))
 
     figs['hist'].update_traces(opacity=0.75)
+    figs['hist'].update_layout(
+            title="Area sizes",
+            xaxis_title="Area (km^2)",
+            yaxis_title="Relative frequency",
+            )
+    df = pd.read_csv(pjoin(outdir, 'summary.csv'))
+
+    ########################################################## Entropy plots
+    for _, row in df.iterrows():
+        figs['entropy'].add_trace(go.Scatter(
+            x=[row.areaentropy],
+            y=[row.wdistmean/row.segmean],
+            mode='markers',
+            marker_size=40,
+            name=row.city,
+            ))
+        figs['entropyz'].add_trace(go.Scatter(
+            x=[row.areaentropy],
+            y=[(row.wdistmean-np.mean(df.wdistmean)) / np.std(df.wdiststd)],
+            mode='markers',
+            marker_size=40,
+            name=row.city,
+            ))
+    figs['entropy'].update_layout(
+            title="Entropy of areas X mean distance (normalized)",
+            xaxis_title="Entropy of block area",
+            yaxis_title="Shortest path length (normalized by segment length mean)",
+            )
+    figs['entropyz'].update_layout(
+            title="Entropy of areas X mean distance (z-score)",
+            xaxis_title="Entropy of block area",
+            yaxis_title="Shortest path length (standardized among all measures)",
+            )
+
+
+    ########################################################## Evenness plots
+    for _, row in df.iterrows():
+        figs['evenness'].add_trace(go.Scatter(
+            x=[row.areaeveness],
+            y=[row.wdistmean/row.segmean],
+            mode='markers',
+            marker_size=40,
+            name=row.city,
+            ))
+    figs['evenness'].update_layout(
+            title="Evenness of areas X mean distance (normalized)",
+            xaxis_title="Evenness of block area",
+            yaxis_title="Shortest path length (normalized by segment length mean)",
+            )
+
+    ########################################################## Coefficient of variation
+    for _, row in df.iterrows():
+        figs['coefvar'].add_trace(go.Scatter(
+            x=[row.areacv],
+            y=[row.wdistmean/row.segmean],
+            mode='markers',
+            marker_size=40,
+            name=row.city,
+            ))
+    figs['coefvar'].update_layout(
+            title="Length of shortest paths X Variation of block sizes",
+            xaxis_title="Coeff of variation of block areas",
+            yaxis_title="Length of shortest paths normalized by average segment length",
+            )
+    ########################################################## Save to file
     plotly.offline.plot(figs['hist'], filename=pjoin(outdir, 'hist.html'), auto_open=False)
     plotly.offline.plot(figs['boxplot'], filename=pjoin(outdir, 'boxplot.html'), auto_open=False)
+    plotly.offline.plot(figs['entropy'], filename=pjoin(outdir, 'entropy.html'), auto_open=False)
+    plotly.offline.plot(figs['entropyz'], filename=pjoin(outdir, 'entropyz.html'), auto_open=False)
+    plotly.offline.plot(figs['evenness'], filename=pjoin(outdir, 'evenness.html'), auto_open=False)
+    plotly.offline.plot(figs['coefvar'], filename=pjoin(outdir, 'coefvar.html'), auto_open=False)
 
 #########################################################
 def plot_graph_raster(graphsdir, skeldir):
@@ -195,11 +272,11 @@ def get_components_from_raster(rasterdir, outdir):
 
 ##########################################################
 def generate_components_vis(components, compdir):
-    info('Generating components visualization ...')
     if os.path.exists(compdir):
         info('{} already exists. Skipping ...'.format(compdir))
         return
 
+    info('Generating components visualization ...')
     os.makedirs(compdir)
 
     for k, labels in components.items():
@@ -265,36 +342,41 @@ def compute_graph_statistics(graphsdir):
     wdistmean = {}
     wdiststd = {}
 
+
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
 
         k = os.path.splitext(filepath)[0]
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
-        d = np.array(g.shortest_paths())
-        wd = np.array(g.shortest_paths(weights=g.es['weight']))
-        nvertices = len(g.vs)
 
-        # avgdist = 0.0
-        # avgwdist = 0.0
-        ndists = int((nvertices * (nvertices-1)) / 2)
+        n = len(g.vs)
+        ndists = int((n * (n-1)) / 2)
 
-        acc = 0
-        inds = np.ndarray((ndists, 2), dtype=int)
+        udsum = 0.0
+        ud2sum = 0.0
+        wdsum = 0.0
+        wd2sum = 0.0
 
-        for i in range(nvertices):
-            for j in range(i+1, nvertices):
-                inds[acc] = [i, j]
-                # avgdist += d[i, j] / ndists
-                # avgwdist += d[i, j] / ndists
-                acc += 1
+        # Using the function for all vertice at once crashes
+        for i in range(n):
+            aux = np.array(g.shortest_paths(source=i, mode='ALL'))[0][i+1:]
+            udsum += np.sum(aux)
+            ud2sum += np.sum(np.square(aux))
 
-        udistmean[k] = np.mean(d[inds[:, 0], inds[:, 1]])
-        udiststd[k] = np.std(d[inds[:, 0], inds[:, 1]])
-        wdistmean[k] = np.mean(wd[inds[:, 0], inds[:, 1]])
-        wdiststd[k] = np.std(wd[inds[:, 0], inds[:, 1]])
+            aux = np.array(g.shortest_paths(source=i, mode='ALL',
+                weights=g.es['weight']))[0][i+1:]
+            wdsum += np.sum(aux)
+            wd2sum += np.sum(np.square(aux))
+
         segmean[k] = np.mean(g.es['weight'])
         segstd[k] = np.std(g.es['weight'])
+
+        udistmean[k] = udsum / ndists
+        udiststd[k] = ( np.sum(ud2sum) - ((np.sum(udsum)**2)/ndists)) / ndists
+        wdistmean[k] = wdsum / ndists
+        wdiststd[k] = ( np.sum(wd2sum) - ((np.sum(wdsum)**2)/ndists)) / ndists
+        # print(segmean[k], segstd[k], udistmean[k], udiststd[k], wdistmean[k], wdiststd[k])
     return segmean, segstd, udistmean, udiststd, wdistmean, wdiststd
 
 ##########################################################
@@ -313,6 +395,7 @@ def compute_statistics(graphsdir, allareas, outdir):
     fh.write('city,nblocks,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,wdistmean,wdiststd\n')
 
     segmean, segstd, udistmean, udiststd, wdistmean, wdiststd = compute_graph_statistics(graphsdir)
+
     for k, areas in allareas.items():
         a = areas[2:] # 0: skeleton, 1: background
         arel = a / np.sum(a)
@@ -323,6 +406,7 @@ def compute_statistics(graphsdir, allareas, outdir):
                 segmean[k], segstd[k],
                 udistmean[k], udiststd[k], wdistmean[k], wdiststd[k]
                 ]
+        # print(','.join([ str(s) for s in st]))
         fh.write(','.join([ str(s) for s in st]) + '\n')
 
 ##########################################################
@@ -399,8 +483,7 @@ def main():
     generate_components_vis(components, compdir)
     allareas = calculate_block_areas(components, lonlatranges, args.outdir)
     compute_statistics(weightdir, allareas, args.outdir)
-    filteredareas = filter_areas(allareas) # 0: skeleton, 1: background
-    plot_distributions(filteredareas, args.outdir)
+    plot_distributions(args.outdir)
 
 if __name__ == "__main__":
     main()
