@@ -356,7 +356,6 @@ def add_weights_to_edges(graphsdir, weightdir):
         outpath = pjoin(weightdir, filepath)
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
-        if 'lattice' in filepath: continue
         for e in g.es:
             coordu = np.array([ g.vs[e.source]['posy'], g.vs[e.source]['posx'] ])
             coordv = np.array([ g.vs[e.target]['posy'], g.vs[e.target]['posx'] ])
