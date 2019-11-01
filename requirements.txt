@@ -1,0 +1,10 @@
+pycairo
+pandas
+jupyter	
+python-igraph			
+opencv
+pyproj
+shapely
+plotly
+scipy
+haversine
