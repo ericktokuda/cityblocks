@@ -14,6 +14,9 @@ import matplotlib.pyplot as plt
 import cv2
 import pickle as pkl
 import pandas as pd
+import graph_tool
+import graph_tool.centrality
+import graph_tool.topology
 
 # for function calculate_real_area
 import pyproj
@@ -342,6 +345,10 @@ def compute_graph_statistics(graphsdir):
     wdistmean = {}
     wdiststd = {}
     nvertices = {}
+    betwvmean = {}
+    betwvstd = {}
+    betwemean = {}
+    betwestd = {}
     nedges = {}
 
     for filepath in os.listdir(graphsdir):
@@ -350,6 +357,7 @@ def compute_graph_statistics(graphsdir):
         k = os.path.splitext(filepath)[0]
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        gt = graph_tool.load_graph(pjoin(graphsdir, filepath))
 
         n = len(g.vs)
         ndists = int((n * (n-1)) / 2)
@@ -359,19 +367,25 @@ def compute_graph_statistics(graphsdir):
         wdsum = 0.0
         wd2sum = 0.0
 
-        # Using the function for all vertice at once crashes
+        dists = graph_tool.topology.shortest_distance(gt)
+        wdists = graph_tool.topology.shortest_distance(gt, weights=gt.edge_properties['weight'])
         for i in range(n):
-            aux = np.array(g.shortest_paths(source=i, mode='ALL'))[0][i+1:]
-            udsum += np.sum(aux)
-            ud2sum += np.sum(np.square(aux))
+            for j in range(i+1, n):
+                udsum += dists[i][j]
+                ud2sum += dists[i][j]*dists[i][j]
 
-            aux = np.array(g.shortest_paths(source=i, mode='ALL',
-                weights=g.es['weight']))[0][i+1:]
-            wdsum += np.sum(aux)
-            wd2sum += np.sum(np.square(aux))
+                wdsum += wdists[i][j]
+                wd2sum += wdists[i][j]*wdists[i][j]
 
         segmean[k] = np.mean(g.es['weight'])
         segstd[k] = np.std(g.es['weight'])
+
+        
+        bv, be = graph_tool.centrality.betweenness(gt)
+        betwvmean[k] = np.mean(list(bv))
+        betwvstd[k] = np.std(list(bv))
+        betwemean[k] = np.mean(list(be))
+        betwestd[k] = np.std(list(be))
 
         udistmean[k] = udsum / ndists
         udiststd[k] = ( np.sum(ud2sum) - ((np.sum(udsum)**2)/ndists)) / ndists
@@ -379,7 +393,8 @@ def compute_graph_statistics(graphsdir):
         wdiststd[k] = ( np.sum(wd2sum) - ((np.sum(wdsum)**2)/ndists)) / ndists
         nvertices[k] = len(g.vs)
         nedges[k] = len(g.es)
-    return nvertices, nedges, segmean, segstd, udistmean, udiststd, wdistmean, wdiststd
+    return nvertices, nedges, segmean, segstd, udistmean, udiststd, wdistmean, wdiststd, betwvmean, betwvstd, betwemean, betwestd
+
 
 ##########################################################
 def compute_statistics(graphsdir, allareas, outdir):
@@ -394,19 +409,21 @@ def compute_statistics(graphsdir, allareas, outdir):
         return
 
     fh = open(outpath, 'w')
-    fh.write('city,nblocks,areasum,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,wdistmean,wdiststd\n')
+    fh.write('city,nblocks,areasum,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,wdistmean,wdiststd,betwvmean,betwvstd,betwemean,betwestd\n')
 
-    nvertices, nedges, segmean, segstd, udistmean, udiststd, wdistmean, wdiststd = compute_graph_statistics(graphsdir)
+    betwvmean, betwvstd, betwemean, betwstd, nvertices, nedges, segmean, segstd, udistmean, udiststd, wdistmean, wdiststd = compute_graph_statistics(graphsdir)
 
     for k, areas in allareas.items():
         a = areas[2:] # 0: skeleton, 1: background
         arel = a / np.sum(a)
         entropy = -np.sum(arel * np.log(arel))
         evenness = np.exp(entropy) / len(arel)
-        st = [k, nvertices[k], nedges[k], len(a), np.sum(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
+        st = [k, nvertices[k], nedges[k], len(a), np.sum(a),
+                np.mean(a), np.std(a), np.std(a)/np.mean(a),
                 np.min(a), np.max(a), entropy, evenness,
                 segmean[k], segstd[k],
-                udistmean[k], udiststd[k], wdistmean[k], wdiststd[k]
+                udistmean[k], udiststd[k], wdistmean[k], wdiststd[k],
+                betwvmean[k], betwvstd[k], betwemean[k], betwstd[k]
                 ]
         # print(','.join([ str(s) for s in st]))
         fh.write(','.join([ str(s) for s in st]) + '\n')
