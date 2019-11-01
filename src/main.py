@@ -232,6 +232,7 @@ def calculate_block_areas(labels, lonlatranges, outdir):
     for k in areas.keys():
         areas[k] = areas[k] * conversionfactors[k]
     pkl.dump(areas, open(outpath, 'wb'))
+    return areas
 
 ##########################################################
 def calculate_raster_areas(labels, outdir):
@@ -257,8 +258,13 @@ def filter_areas(areas):
 ##########################################################
 def compute_graph_statistics(graphsdir):
     info('Computing graph statistics ...')
-    avgdists = {}
-    avgwdists = {}
+    segmean = {}
+    segstd = {}
+    udistmean = {}
+    udiststd = {}
+    wdistmean = {}
+    wdiststd = {}
+
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
 
@@ -269,17 +275,27 @@ def compute_graph_statistics(graphsdir):
         wd = np.array(g.shortest_paths(weights=g.es['weight']))
         nvertices = len(g.vs)
 
-        avgdist = 0.0
-        avgwdist = 0.0
-        ndists = (nvertices * (nvertices-1)) / 2
+        # avgdist = 0.0
+        # avgwdist = 0.0
+        ndists = int((nvertices * (nvertices-1)) / 2)
+
+        acc = 0
+        inds = np.ndarray((ndists, 2), dtype=int)
 
         for i in range(nvertices):
             for j in range(i+1, nvertices):
-                avgdist += d[i, j] / ndists
-                avgwdist += d[i, j] / ndists
-        avgdists[k] = avgdist
-        avgwdists[k] = avgwdist
-    return avgdists, avgwdists
+                inds[acc] = [i, j]
+                # avgdist += d[i, j] / ndists
+                # avgwdist += d[i, j] / ndists
+                acc += 1
+
+        udistmean[k] = np.mean(d[inds[:, 0], inds[:, 1]])
+        udiststd[k] = np.std(d[inds[:, 0], inds[:, 1]])
+        wdistmean[k] = np.mean(wd[inds[:, 0], inds[:, 1]])
+        wdiststd[k] = np.std(wd[inds[:, 0], inds[:, 1]])
+        segmean[k] = np.mean(g.es['weight'])
+        segstd[k] = np.std(g.es['weight'])
+    return segmean, segstd, udistmean, udiststd, wdistmean, wdiststd
 
 ##########################################################
 def compute_statistics(graphsdir, allareas, outdir):
@@ -294,17 +310,18 @@ def compute_statistics(graphsdir, allareas, outdir):
         return
 
     fh = open(outpath, 'w')
-    fh.write('city,nblocks,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,avgudist,avgwdist\n')
+    fh.write('city,nblocks,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,wdistmean,wdiststd\n')
 
-    avgudist, avgwdist = compute_graph_statistics(graphsdir)
+    segmean, segstd, udistmean, udiststd, wdistmean, wdiststd = compute_graph_statistics(graphsdir)
     for k, areas in allareas.items():
         a = areas[2:] # 0: skeleton, 1: background
         arel = a / np.sum(a)
-        entropy = arel * np.log(arel)
-        evenness = np.exp(entropy) / len(entropy)
-        
+        entropy = -np.sum(arel * np.log(arel))
+        evenness = np.exp(entropy) / len(arel)
         st = [k, len(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
-                np.min(a), np.max(a), entropy, evenness, avgudist[k], avgwdist[k]
+                np.min(a), np.max(a), entropy, evenness,
+                segmean[k], segstd[k],
+                udistmean[k], udiststd[k], wdistmean[k], wdiststd[k]
                 ]
         fh.write(','.join([ str(s) for s in st]) + '\n')
 
