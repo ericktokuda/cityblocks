@@ -9,7 +9,7 @@ from os.path import join as pjoin
 from logging import debug, info
 import numpy as np
 import igraph
-import networkx as nx
+# import networkx as nx
 import matplotlib.pyplot as plt
 import cv2
 import pickle as pkl
