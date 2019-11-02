@@ -10,7 +10,7 @@ from logging import debug, info
 import numpy as np
 import igraph
 # import networkx as nx
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import cv2
 import pickle as pkl
 import pandas as pd
