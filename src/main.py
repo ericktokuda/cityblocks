@@ -46,7 +46,10 @@ def xnet2igraph_batch(xnetdir):
     for xnetgraphpath in os.listdir(xnetdir):
         if not xnetgraphpath.endswith('.xnet'): continue
         g = xnet.xnet2igraph(pjoin(xnetdir, xnetgraphpath))
-        coords = [ (x,y) for x, y in zip(g.vs['posx'], g.vs['posy']) ]
+        g.vs['x'] = g.vs['posx']
+        g.vs['y'] = g.vs['posy']
+        del g.vs['posx']
+        del g.vs['posy']
         outfilename = pjoin(outdir, os.path.splitext(xnetgraphpath)[0] + '.graphml')
         igraph.write(g, outfilename, 'graphml')
         acc += 1
@@ -217,8 +220,8 @@ def plot_graph_raster(graphsdir, skeldir):
         if not filepath.endswith('.graphml'): continue
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
-        lonrange = [np.min(g.vs['posx']), np.max(g.vs['posx'])]
-        latrange = [np.min(g.vs['posy']), np.max(g.vs['posy'])]
+        lonrange = [np.min(g.vs['x']), np.max(g.vs['x'])]
+        latrange = [np.min(g.vs['y']), np.max(g.vs['y'])]
 
         lonfigsize = (lonrange[1] - lonrange[0])*figfactor
         latfigsize = (latrange[1] - latrange[0])*figfactor
@@ -232,7 +235,7 @@ def plot_graph_raster(graphsdir, skeldir):
         )
 
         outpath = pjoin(skeldir, os.path.splitext(filepath)[0] + '.png')
-        layout = [ (x, -y) for x, y in zip(g.vs['posx'], g.vs['posy']) ]
+        layout = [ (x, -y) for x, y in zip(g.vs['x'], g.vs['y']) ]
         igraph.plot(g, target=outpath, layout=layout, **visual)
 
 ##########################################################
@@ -408,13 +411,77 @@ def compute_statistics(graphsdir, allareas, outdir):
         info('{} already exists. Skipping ...'.format(outpath))
         return
 
-    fh = open(outpath, 'w')
+    info('Computing graph statistics...')
+    fh = open(outpath, 'w', buffering=1)
     fh.write('city,nblocks,areasum,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,wdistmean,wdiststd,betwvmean,betwvstd,betwemean,betwestd\n')
 
-    betwvmean, betwvstd, betwemean, betwstd, nvertices, nedges, segmean, segstd, udistmean, udiststd, wdistmean, wdiststd = compute_graph_statistics(graphsdir)
+    segmean = {}
+    segstd = {}
+    udistmean = {}
+    udiststd = {}
+    wdistmean = {}
+    wdiststd = {}
+    nvertices = {}
+    betwvmean = {}
+    betwvstd = {}
+    betwemean = {}
+    betwestd = {}
+    nedges = {}
 
-    for k, areas in allareas.items():
-        a = areas[2:] # 0: skeleton, 1: background
+    for k in allareas.keys():
+        info(' *' + k)
+        filepath = pjoin(graphsdir, k + '.graphml')
+        g = igraph.Graph.Read(filepath)
+        gt = graph_tool.load_graph(filepath)
+
+        n = len(g.vs)
+        ndists = int((n * (n-1)) / 2)
+
+        udsum = 0.0
+        ud2sum = 0.0
+        wdsum = 0.0
+        wd2sum = 0.0
+
+        # dists = graph_tool.topology.shortest_distance(gt)
+        # wdists = graph_tool.topology.shortest_distance(gt, weights=gt.edge_properties['weight'])
+        # for i in range(n):
+            # for j in range(i+1, n):
+                # udsum += dists[i][j]
+                # ud2sum += dists[i][j]*dists[i][j]
+
+                # wdsum += wdists[i][j]
+                # wd2sum += wdists[i][j]*wdists[i][j]
+
+
+        # Using the function for all vertice at once crashes
+        for i in range(n):
+            aux = np.array(g.shortest_paths(source=i, mode='ALL'))[0][i+1:]
+            udsum += np.sum(aux)
+            ud2sum += np.sum(np.square(aux))
+
+            aux = np.array(g.shortest_paths(source=i, mode='ALL',
+                weights=g.es['weight']))[0][i+1:]
+            wdsum += np.sum(aux)
+            wd2sum += np.sum(np.square(aux))
+
+        segmean[k] = np.mean(g.es['weight'])
+        segstd[k] = np.std(g.es['weight'])
+        
+        bv, be = graph_tool.centrality.betweenness(gt)
+        betwvmean[k] = np.mean(list(bv))
+        betwvstd[k] = np.std(list(bv))
+        betwemean[k] = np.mean(list(be))
+        betwestd[k] = np.std(list(be))
+
+        udistmean[k] = udsum / ndists
+        udiststd[k] = ( np.sum(ud2sum) - ((np.sum(udsum)**2)/ndists)) / ndists
+        wdistmean[k] = wdsum / ndists
+        wdiststd[k] = ( np.sum(wd2sum) - ((np.sum(wdsum)**2)/ndists)) / ndists
+        nvertices[k] = len(g.vs)
+        nedges[k] = len(g.es)
+        ##########################################################
+
+        a = allareas[k][2:] # 0: skeleton, 1: background
         arel = a / np.sum(a)
         entropy = -np.sum(arel * np.log(arel))
         evenness = np.exp(entropy) / len(arel)
@@ -423,9 +490,8 @@ def compute_statistics(graphsdir, allareas, outdir):
                 np.min(a), np.max(a), entropy, evenness,
                 segmean[k], segstd[k],
                 udistmean[k], udiststd[k], wdistmean[k], wdiststd[k],
-                betwvmean[k], betwvstd[k], betwemean[k], betwstd[k]
+                betwvmean[k], betwvstd[k], betwemean[k], betwestd[k]
                 ]
-        # print(','.join([ str(s) for s in st]))
         fh.write(','.join([ str(s) for s in st]) + '\n')
 
 ##########################################################
@@ -434,16 +500,16 @@ def generate_test_graphs(outdir):
     g = igraph.Graph.Lattice([sz, sz], circular=False) # lattice
     coords = np.array(g.layout('grid').coords)
     _range = (np.max(coords, 0) - np.min(coords, 0)) * 10
-    g.vs['posx'] = coords[:, 0] / _range[0]
-    g.vs['posy'] = coords[:, 1] / _range[1]
+    g.vs['x'] = coords[:, 0] / _range[0]
+    g.vs['y'] = coords[:, 1] / _range[1]
     outfilename = pjoin(outdir, 'lattice.graphml')
     igraph.write(g, outfilename, 'graphml')
 
     g = igraph.Graph.Erdos_Renyi(60, p=1) # lattice
     coords = np.array(g.layout('random').coords)
     _range = (np.max(coords, 0) - np.min(coords, 0)) * 10
-    g.vs['posx'] = coords[:, 0] / _range[0]
-    g.vs['posy'] = coords[:, 1] / _range[1]
+    g.vs['x'] = coords[:, 0] / _range[0]
+    g.vs['y'] = coords[:, 1] / _range[1]
     outfilename = pjoin(outdir, 'erdos.graphml')
     igraph.write(g, outfilename, 'graphml')
 
@@ -460,9 +526,18 @@ def add_weights_to_edges(graphsdir, weightdir):
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
         g.to_undirected()
+        g = g.components(mode='weak').giant()
+        if 'x' in g.vs.attributes():
+            g.vs['x'] = np.array(g.vs['x']).astype(float)
+            g.vs['y'] = np.array(g.vs['y']).astype(float)
+        else:
+            g.vs['x'] = np.array(g.vs['posx']).astype(float)
+            g.vs['y'] = np.array(g.vs['posy']).astype(float)
+
+        del g.vs['id'] # Avoid future warnings
         for e in g.es:
-            coordu = np.array([ g.vs[e.source]['posy'], g.vs[e.source]['posx'] ])
-            coordv = np.array([ g.vs[e.target]['posy'], g.vs[e.target]['posx'] ])
+            coordu = np.array([ g.vs[e.source]['y'], g.vs[e.source]['x'] ])
+            coordv = np.array([ g.vs[e.target]['y'], g.vs[e.target]['x'] ])
             e['weight'] = haversine(coordu, coordv, unit='km') # in meters
         igraph.write(g, outpath, 'graphml')
 
@@ -474,8 +549,8 @@ def get_maps_ranges(graphsdir):
         k = os.path.splitext(filepath)[0]
         if not filepath.endswith('.graphml'): continue
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
-        lon = g.vs['posx']
-        lat = g.vs['posy']
+        lon = g.vs['x']
+        lat = g.vs['y']
         ranges[k] = np.array([np.min(lon), np.min(lat), np.max(lon), np.max(lat)])
     return ranges
 
@@ -483,7 +558,7 @@ def get_maps_ranges(graphsdir):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('graphsdir', help='Graphs directory')
-    parser.add_argument('--outdir', default='/tmp/', help='Output directory')
+    parser.add_argument('outdir', default='/tmp/', help='Output directory')
     args = parser.parse_args()
 
     logging.basicConfig(format='[%(asctime)s] %(message)s',
