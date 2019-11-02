@@ -1,6 +1,5 @@
 pycairo
 pandas
-jupyter	
 python-igraph			
 opencv
 pyproj
