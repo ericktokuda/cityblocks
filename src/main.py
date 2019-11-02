@@ -14,9 +14,9 @@ import igraph
 import cv2
 import pickle as pkl
 import pandas as pd
-import graph_tool
-import graph_tool.centrality
-import graph_tool.topology
+# import graph_tool
+# import graph_tool.centrality
+# import graph_tool.topology
 
 # for function calculate_real_area
 import pyproj
@@ -339,67 +339,6 @@ def filter_areas(areas):
     return areas
 
 ##########################################################
-def compute_graph_statistics(graphsdir):
-    info('Computing graph statistics ...')
-    segmean = {}
-    segstd = {}
-    udistmean = {}
-    udiststd = {}
-    wdistmean = {}
-    wdiststd = {}
-    nvertices = {}
-    betwvmean = {}
-    betwvstd = {}
-    betwemean = {}
-    betwestd = {}
-    nedges = {}
-
-    for filepath in os.listdir(graphsdir):
-        if not filepath.endswith('.graphml'): continue
-
-        k = os.path.splitext(filepath)[0]
-        info(' *' + filepath)
-        g = igraph.Graph.Read(pjoin(graphsdir, filepath))
-        gt = graph_tool.load_graph(pjoin(graphsdir, filepath))
-
-        n = len(g.vs)
-        ndists = int((n * (n-1)) / 2)
-
-        udsum = 0.0
-        ud2sum = 0.0
-        wdsum = 0.0
-        wd2sum = 0.0
-
-        dists = graph_tool.topology.shortest_distance(gt)
-        wdists = graph_tool.topology.shortest_distance(gt, weights=gt.edge_properties['weight'])
-        for i in range(n):
-            for j in range(i+1, n):
-                udsum += dists[i][j]
-                ud2sum += dists[i][j]*dists[i][j]
-
-                wdsum += wdists[i][j]
-                wd2sum += wdists[i][j]*wdists[i][j]
-
-        segmean[k] = np.mean(g.es['weight'])
-        segstd[k] = np.std(g.es['weight'])
-
-        
-        bv, be = graph_tool.centrality.betweenness(gt)
-        betwvmean[k] = np.mean(list(bv))
-        betwvstd[k] = np.std(list(bv))
-        betwemean[k] = np.mean(list(be))
-        betwestd[k] = np.std(list(be))
-
-        udistmean[k] = udsum / ndists
-        udiststd[k] = ( np.sum(ud2sum) - ((np.sum(udsum)**2)/ndists)) / ndists
-        wdistmean[k] = wdsum / ndists
-        wdiststd[k] = ( np.sum(wd2sum) - ((np.sum(wdsum)**2)/ndists)) / ndists
-        nvertices[k] = len(g.vs)
-        nedges[k] = len(g.es)
-    return nvertices, nedges, segmean, segstd, udistmean, udiststd, wdistmean, wdiststd, betwvmean, betwvstd, betwemean, betwestd
-
-
-##########################################################
 def compute_statistics(graphsdir, allareas, outdir):
     """Compute statistics from areas
 
@@ -413,7 +352,9 @@ def compute_statistics(graphsdir, allareas, outdir):
 
     info('Computing graph statistics...')
     fh = open(outpath, 'w', buffering=1)
-    fh.write('city,nblocks,areasum,areamean,areastd,areacv,areamin,areamax,areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,wdistmean,wdiststd,betwvmean,betwvstd,betwemean,betwestd\n')
+    fh.write('city,nvertices,nedges,nblocks,areasum,areamean,areastd,areacv,areamin,areamax,' \
+            'areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,' \
+            'wdistmean,wdiststd,betwvmean,betwvstd\n')
 
     segmean = {}
     segstd = {}
@@ -432,7 +373,7 @@ def compute_statistics(graphsdir, allareas, outdir):
         info(' *' + k)
         filepath = pjoin(graphsdir, k + '.graphml')
         g = igraph.Graph.Read(filepath)
-        gt = graph_tool.load_graph(filepath)
+        # gt = graph_tool.load_graph(filepath)
 
         n = len(g.vs)
         ndists = int((n * (n-1)) / 2)
@@ -452,7 +393,6 @@ def compute_statistics(graphsdir, allareas, outdir):
                 # wdsum += wdists[i][j]
                 # wd2sum += wdists[i][j]*wdists[i][j]
 
-
         # Using the function for all vertice at once crashes
         for i in range(n):
             aux = np.array(g.shortest_paths(source=i, mode='ALL'))[0][i+1:]
@@ -467,11 +407,10 @@ def compute_statistics(graphsdir, allareas, outdir):
         segmean[k] = np.mean(g.es['weight'])
         segstd[k] = np.std(g.es['weight'])
         
-        bv, be = graph_tool.centrality.betweenness(gt)
-        betwvmean[k] = np.mean(list(bv))
-        betwvstd[k] = np.std(list(bv))
-        betwemean[k] = np.mean(list(be))
-        betwestd[k] = np.std(list(be))
+        # bv, be = graph_tool.centrality.betweenness(gt)
+        bv = g.betweenness()
+        betwvmean[k] = np.mean(bv)
+        betwvstd[k] = np.std(bv)
 
         udistmean[k] = udsum / ndists
         udiststd[k] = ( np.sum(ud2sum) - ((np.sum(udsum)**2)/ndists)) / ndists
@@ -490,7 +429,7 @@ def compute_statistics(graphsdir, allareas, outdir):
                 np.min(a), np.max(a), entropy, evenness,
                 segmean[k], segstd[k],
                 udistmean[k], udiststd[k], wdistmean[k], wdiststd[k],
-                betwvmean[k], betwvstd[k], betwemean[k], betwestd[k]
+                betwvmean[k], betwvstd[k]
                 ]
         fh.write(','.join([ str(s) for s in st]) + '\n')
 
