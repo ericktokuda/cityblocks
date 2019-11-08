@@ -229,11 +229,31 @@ def plot_graph_raster(graphsdir, skeldir):
 
     info('Reading graphs from {} ...'.format(graphsdir))
     allareas = {}
-    figfactor = 10000
+    figfactor = 20000
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        for ed in g.es():
+            if 'geometry' not in ed.attributes(): continue # split lines
+            if ed['geometry'] == None or ed['geometry'] == '': continue
+
+            y = ed['geometry'].split('(')[1][:-1].split(', ')
+            artnodes = []
+            nartnodes = len(y)
+            nnodes = len(g.vs)
+
+            for j in range(nartnodes):
+                aux = y[j].split(' ')
+                g.add_vertex(nnodes + j, x=float(aux[0]), y=float(aux[1]))
+
+            g.add_edge(g.vs[ed.source], g.vs[nnodes]) #source->first
+            for j in range(1, nartnodes): #internal nodes
+                g.add_edge(g.vs[nnodes+j-1], g.vs[nnodes+j])
+            g.add_edge(g.vs[nnodes+nartnodes-1], g.vs[ed.target]) #internal->target
+            g.delete_edges((ed.source, ed.target))
+
+        g.to_undirected()
         lonrange = [np.min(g.vs['x']), np.max(g.vs['x'])]
         latrange = [np.min(g.vs['y']), np.max(g.vs['y'])]
 
@@ -289,7 +309,7 @@ def get_components_from_raster(rasterdir, outdir):
         # kernel = np.ones((3,3),np.uint8)
         # img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
 
-        ret, labels = cv2.connectedComponents(img)
+        ret, labels = cv2.connectedComponents(img, connectivity=4)
         components[os.path.splitext(filepath)[0]] = labels
     pkl.dump(components, open(outpath, 'wb'))
     return components
@@ -403,6 +423,7 @@ def compute_statistics(graphsdir, allareas, outdir):
             wdsum = 0.0
             wd2sum = 0.0
 
+            ########################################################## slower
             # dists = graph_tool.topology.shortest_distance(gt)
             # wdists = graph_tool.topology.shortest_distance(gt, weights=gt.edge_properties['weight'])
             # for i in range(n):
@@ -412,6 +433,7 @@ def compute_statistics(graphsdir, allareas, outdir):
 
                     # wdsum += wdists[i][j]
                     # wd2sum += wdists[i][j]*wdists[i][j]
+            ##########################################################
 
             # Using the function for all vertice at once crashes
             for i in range(n):
@@ -489,7 +511,6 @@ def add_weights_to_edges(graphsdir, weightdir):
         outpath = pjoin(weightdir, filepath)
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
-        g.to_undirected()
         g = g.components(mode='weak').giant()
         if 'x' in g.vs.attributes():
             g.vs['x'] = np.array(g.vs['x']).astype(float)
@@ -500,9 +521,13 @@ def add_weights_to_edges(graphsdir, weightdir):
 
         del g.vs['id'] # Avoid future warnings
         for e in g.es:
-            coordu = np.array([ g.vs[e.source]['y'], g.vs[e.source]['x'] ])
-            coordv = np.array([ g.vs[e.target]['y'], g.vs[e.target]['x'] ])
-            e['weight'] = haversine(coordu, coordv, unit='km') # in meters
+            try:
+                e['weight'] = float(e['length'])
+            except:
+                coordu = np.array([ g.vs[e.source]['y'], g.vs[e.source]['x'] ])
+                coordv = np.array([ g.vs[e.target]['y'], g.vs[e.target]['x'] ])
+                e['weight'] = haversine(coordu, coordv, unit='km') # in meters
+
         igraph.write(g, outpath, 'graphml')
 
 ##########################################################
