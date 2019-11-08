@@ -108,7 +108,7 @@ def plot_distributions(outdir):
     """
 
     figs = {}
-    for k in ['hist', 'boxplot', 'entropy', 'evenness', 'entropyz', 'coefvar']:
+    for k in ['hist', 'boxplot', 'entropy', 'evenness', 'entropyz', 'entropylog', 'coefvar']:
         figs[k] = go.Figure()
 
     ########################################################## Area plots
@@ -146,20 +146,33 @@ def plot_distributions(outdir):
             x=[row.areaentropy],
             y=[row.wdistmean/row.segmean],
             mode='markers',
-            marker_size=40,
+            marker_size=20,
+            name=row.city,
+            ))
+        figs['entropylog'].add_trace(go.Scatter(
+            x=[row.areaentropy],
+            y=[row.wdistmean/row.segmean],
+            mode='markers',
+            marker_size=20,
             name=row.city,
             ))
         figs['entropyz'].add_trace(go.Scatter(
             x=[row.areaentropy],
             y=[(row.wdistmean-np.mean(df.wdistmean)) / np.std(df.wdiststd)],
             mode='markers',
-            marker_size=40,
+            marker_size=20,
             name=row.city,
             ))
     figs['entropy'].update_layout(
             title="Entropy of areas X mean distance (normalized)",
             xaxis_title="Entropy of block area",
             yaxis_title="Shortest path length (normalized by segment length mean)",
+            )
+    figs['entropylog'].update_layout(
+            title="Entropy of areas X mean distance (normalized)",
+            xaxis_title="Entropy of block area",
+            yaxis_title="Shortest path length (normalized by segment length mean) - LOG",
+            yaxis_type="log"
             )
     figs['entropyz'].update_layout(
             title="Entropy of areas X mean distance (z-score)",
@@ -201,6 +214,7 @@ def plot_distributions(outdir):
     plotly.offline.plot(figs['hist'], filename=pjoin(outdir, 'hist.html'), auto_open=False)
     plotly.offline.plot(figs['boxplot'], filename=pjoin(outdir, 'boxplot.html'), auto_open=False)
     plotly.offline.plot(figs['entropy'], filename=pjoin(outdir, 'entropy.html'), auto_open=False)
+    plotly.offline.plot(figs['entropylog'], filename=pjoin(outdir, 'entropylog.html'), auto_open=False)
     plotly.offline.plot(figs['entropyz'], filename=pjoin(outdir, 'entropyz.html'), auto_open=False)
     plotly.offline.plot(figs['evenness'], filename=pjoin(outdir, 'evenness.html'), auto_open=False)
     plotly.offline.plot(figs['coefvar'], filename=pjoin(outdir, 'coefvar.html'), auto_open=False)
@@ -226,10 +240,14 @@ def plot_graph_raster(graphsdir, skeldir):
         lonfigsize = (lonrange[1] - lonrange[0])*figfactor
         latfigsize = (latrange[1] - latrange[0])*figfactor
 
+        COL='#000000'
+        # COL='#4e7f80'
         visual = dict(
             vertex_size = 0,
-            vertex_color = [0, 0, 0, 0],
-            edge_color = [0, 0, 0, 0],
+            # vertex_size = 5,
+            vertex_frame_width = 0,
+            vertex_color = COL,
+            edge_color = COL,
             edge_width = 2,
             bbox = (lonfigsize, latfigsize)
         )
@@ -368,70 +386,77 @@ def compute_statistics(graphsdir, allareas, outdir):
     betwemean = {}
     betwestd = {}
     nedges = {}
+    errors = []
 
     for k in allareas.keys():
         info(' *' + k)
-        filepath = pjoin(graphsdir, k + '.graphml')
-        g = igraph.Graph.Read(filepath)
-        # gt = graph_tool.load_graph(filepath)
+        try:
+            filepath = pjoin(graphsdir, k + '.graphml')
+            g = igraph.Graph.Read(filepath)
+            # gt = graph_tool.load_graph(filepath)
 
-        n = len(g.vs)
-        ndists = int((n * (n-1)) / 2)
+            n = len(g.vs)
+            ndists = int((n * (n-1)) / 2)
 
-        udsum = 0.0
-        ud2sum = 0.0
-        wdsum = 0.0
-        wd2sum = 0.0
+            udsum = 0.0
+            ud2sum = 0.0
+            wdsum = 0.0
+            wd2sum = 0.0
 
-        # dists = graph_tool.topology.shortest_distance(gt)
-        # wdists = graph_tool.topology.shortest_distance(gt, weights=gt.edge_properties['weight'])
-        # for i in range(n):
-            # for j in range(i+1, n):
-                # udsum += dists[i][j]
-                # ud2sum += dists[i][j]*dists[i][j]
+            # dists = graph_tool.topology.shortest_distance(gt)
+            # wdists = graph_tool.topology.shortest_distance(gt, weights=gt.edge_properties['weight'])
+            # for i in range(n):
+                # for j in range(i+1, n):
+                    # udsum += dists[i][j]
+                    # ud2sum += dists[i][j]*dists[i][j]
 
-                # wdsum += wdists[i][j]
-                # wd2sum += wdists[i][j]*wdists[i][j]
+                    # wdsum += wdists[i][j]
+                    # wd2sum += wdists[i][j]*wdists[i][j]
 
-        # Using the function for all vertice at once crashes
-        for i in range(n):
-            aux = np.array(g.shortest_paths(source=i, mode='ALL'))[0][i+1:]
-            udsum += np.sum(aux)
-            ud2sum += np.sum(np.square(aux))
+            # Using the function for all vertice at once crashes
+            for i in range(n):
+                aux = np.array(g.shortest_paths(source=i, mode='ALL'))[0][i+1:]
+                udsum += np.sum(aux)
+                ud2sum += np.sum(np.square(aux))
 
-            aux = np.array(g.shortest_paths(source=i, mode='ALL',
-                weights=g.es['weight']))[0][i+1:]
-            wdsum += np.sum(aux)
-            wd2sum += np.sum(np.square(aux))
+                aux = np.array(g.shortest_paths(source=i, mode='ALL',
+                    weights=g.es['weight']))[0][i+1:]
+                wdsum += np.sum(aux)
+                wd2sum += np.sum(np.square(aux))
 
-        segmean[k] = np.mean(g.es['weight'])
-        segstd[k] = np.std(g.es['weight'])
-        
-        # bv, be = graph_tool.centrality.betweenness(gt)
-        bv = g.betweenness()
-        betwvmean[k] = np.mean(bv)
-        betwvstd[k] = np.std(bv)
+            segmean[k] = np.mean(g.es['weight'])
+            segstd[k] = np.std(g.es['weight'])
+            
+            # bv, be = graph_tool.centrality.betweenness(gt)
+            bv = g.betweenness()
+            betwvmean[k] = np.mean(bv)
+            betwvstd[k] = np.std(bv)
 
-        udistmean[k] = udsum / ndists
-        udiststd[k] = ( np.sum(ud2sum) - ((np.sum(udsum)**2)/ndists)) / ndists
-        wdistmean[k] = wdsum / ndists
-        wdiststd[k] = ( np.sum(wd2sum) - ((np.sum(wdsum)**2)/ndists)) / ndists
-        nvertices[k] = len(g.vs)
-        nedges[k] = len(g.es)
-        ##########################################################
+            udistmean[k] = udsum / ndists
+            udiststd[k] = ( np.sum(ud2sum) - ((np.sum(udsum)**2)/ndists)) / ndists
+            wdistmean[k] = wdsum / ndists
+            wdiststd[k] = ( np.sum(wd2sum) - ((np.sum(wdsum)**2)/ndists)) / ndists
+            nvertices[k] = len(g.vs)
+            nedges[k] = len(g.es)
+            ##########################################################
 
-        a = allareas[k][2:] # 0: skeleton, 1: background
-        arel = a / np.sum(a)
-        entropy = -np.sum(arel * np.log(arel))
-        evenness = np.exp(entropy) / len(arel)
-        st = [k, nvertices[k], nedges[k], len(a), np.sum(a),
-                np.mean(a), np.std(a), np.std(a)/np.mean(a),
-                np.min(a), np.max(a), entropy, evenness,
-                segmean[k], segstd[k],
-                udistmean[k], udiststd[k], wdistmean[k], wdiststd[k],
-                betwvmean[k], betwvstd[k]
-                ]
-        fh.write(','.join([ str(s) for s in st]) + '\n')
+            a = allareas[k][2:] # 0: skeleton, 1: background
+            arel = a / np.sum(a)
+            entropy = -np.sum(arel * np.log(arel))
+            evenness = np.exp(entropy) / len(arel)
+            st = [k, nvertices[k], nedges[k], len(a), np.sum(a),
+                    np.mean(a), np.std(a), np.std(a)/np.mean(a),
+                    np.min(a), np.max(a), entropy, evenness,
+                    segmean[k], segstd[k],
+                    udistmean[k], udiststd[k], wdistmean[k], wdiststd[k],
+                    betwvmean[k], betwvstd[k]
+                    ]
+            fh.write(','.join([ str(s) for s in st]) + '\n')
+        except:
+            errors.append(k)
+    info('Errors:')
+    info(errors)
+    fh.close()
 
 ##########################################################
 def generate_test_graphs(outdir):
