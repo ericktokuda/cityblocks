@@ -126,15 +126,15 @@ def plot_distributions2(outdir):
             x=[row.areaentropy],
             y=[row.wdistmean/row.segmean],
             mode='markers',
-            marker_size=20,
+            marker_size=10,
             name=row.city,
             ))
     entropylogpearson = pearsonr(df.areaentropy, np.log(df.wdistmean/df.segmean))
     figs['entropylog'].update_layout(
-            title="Entropy of areas vs. average distance (pearson: {:.2f})".\
+            title="Entropy of areas vs. average shortest path length (Pearson: {:.2f})".\
                     format(entropylogpearson[0]),
             xaxis_title="Entropy of block area",
-            yaxis_title="Average distance",
+            yaxis_title="Average shortest path length (normalized)",
             yaxis_type="log"
             )
 
@@ -154,15 +154,15 @@ def plot_distributions2(outdir):
             x=[row.areaentropy],
             y=[row.wdiststd/row.wdistmean/row.segmean],
             mode='markers',
-            marker_size=20,
+            marker_size=10,
             name=row.city,
             ))
     entropycvlogpearson = pearsonr(df.areaentropy, np.log(df.wdiststd/df.wdistmean/df.segmean))
     figs['entropycvlog'].update_layout(
-            title="Entropy of areas vs. coefficient of variance of the distance (pearson: {:.2f})".\
+            title="Entropy of areas vs. coefficient of variation of the distance (Pearson: {:.2f})".\
                     format(entropycvlogpearson[0]),
             xaxis_title="Entropy of block area",
-            yaxis_title="Coefficient of variance of the distance",
+            yaxis_title="Coefficient of variation of the normalized shortest path length",
             yaxis_type='log',
             )
     ########################################################## Save to file
@@ -170,7 +170,7 @@ def plot_distributions2(outdir):
     plotly.offline.plot(figs['entropyhist'], filename=pjoin(outdir, 'entropyhist.html'), auto_open=False)
     plotly.offline.plot(figs['entropycvlog'], filename=pjoin(outdir, 'entropycvlog.html'), auto_open=False)
 
-    figs['entropylog'].write_image("/tmp/foo.png")
+    # figs['entropylog'].write_image("/tmp/foo.png")
 
 ##########################################################
 def plot_distributions(outdir):
@@ -245,7 +245,7 @@ def plot_distributions(outdir):
             )
     entropylogpearson = pearsonr(df.areaentropy, np.log(df.wdistmean/df.segmean))
     figs['entropylog'].update_layout(
-            title="Entropy of areas X mean distance (normalized) pearson: " + str(entropylogpearson),
+            title="Entropy of areas X mean distance (normalized) Pearson: " + str(entropylogpearson),
             xaxis_title="Entropy of block area",
             yaxis_title="Shortest path length (normalized by segment length mean) - LOG",
             yaxis_type="log"
@@ -346,7 +346,7 @@ def plot_distributions(outdir):
     plotly.offline.plot(figs['coefvar'], filename=pjoin(outdir, 'coefvar.html'), auto_open=False)
     plotly.offline.plot(figs['coefvarexp'], filename=pjoin(outdir, 'coefvarexp.html'), auto_open=False)
     plotly.offline.plot(figs['betweenness'], filename=pjoin(outdir, 'betweenness.html'), auto_open=False)
-    figs['entropylog'].write_image("/tmp/foo.pdf")
+    # figs['entropylog'].write_image("/tmp/foo.pdf")
 
 #########################################################
 def plot_graph_raster(graphsdir, skeldir):
@@ -688,9 +688,6 @@ def main():
 
     # generate_test_graphs(args.graphsdir)
 
-    plot_distributions2('/tmp/')
-    return
-
     add_weights_to_edges(args.graphsdir, weightdir)
     lonlatranges = get_maps_ranges(weightdir)
     plot_graph_raster(weightdir, skeldir)
@@ -698,7 +695,7 @@ def main():
     generate_components_vis(components, compdir)
     allareas = calculate_block_areas(components, lonlatranges, args.outdir)
     compute_statistics(weightdir, allareas, args.outdir)
-    plot_distributions(args.outdir)
+    plot_distributions2(args.outdir)
 
 if __name__ == "__main__":
     main()
