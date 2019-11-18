@@ -100,7 +100,7 @@ def load_areas(outdir):
     return allareas
 
 ##########################################################
-def plot_distributions2(outdir):
+def plot_distributions2(outdir, lonlatranges):
     """Plot distributions for each array of areas
 
     Args:
@@ -109,7 +109,7 @@ def plot_distributions2(outdir):
     """
 
     figs = {}
-    for k in ['entropylog', 'entropycvlog', 'entropyhist']:
+    for k in ['entropylog',  'entropyfilteredlog', 'entropydiagonallog', 'entropycvlog', 'entropyhist']:
         figs[k] = go.Figure()
 
     ########################################################## Area plots
@@ -131,13 +131,55 @@ def plot_distributions2(outdir):
             ))
     entropylogpearson = pearsonr(df.areaentropy, np.log(df.wdistmean/df.segmean))
     figs['entropylog'].update_layout(
-            title="Entropy of areas vs. average shortest path length (Pearson: {:.2f})".\
+            title="Entropy of areas vs. average path length norm. by mean segment length (Pearson: {:.2f})".\
                     format(entropylogpearson[0]),
             xaxis_title="Entropy of block area",
-            yaxis_title="Average shortest path length (normalized)",
+            yaxis_title="Average path length (normalized by mean segment length)",
             yaxis_type="log"
             )
 
+    df2 = df.copy()
+    df2 = df2[ (df2.segmean > 130) & (df2.segmean < 135) ]
+    for _, row in df2.iterrows():
+         figs['entropyfilteredlog'].add_trace(go.Scatter(
+            x=[row.areaentropy],
+            y=[row.wdistmean],
+            mode='markers',
+            marker_size=10,
+            name=row.city,
+            ))
+    entropylogpearson = pearsonr(df2.areaentropy, np.log(df2.wdistmean))
+    figs['entropyfilteredlog'].update_layout(
+            title="Entropy of areas vs. average path length non-normalized (Pearson: {:.2f})".\
+                    format(entropylogpearson[0]),
+            xaxis_title="Entropy of block area",
+            yaxis_title="Average path length",
+            yaxis_type="log"
+            )
+
+    df2 = df.copy()
+    df2 = df2[ (df2.segmean > 130) & (df2.segmean < 135) ]
+    auxs = []
+    for _, row in df2.iterrows():
+         p = lonlatranges[row['city']]
+         aux = haversine([p[1], p[0]], [p[3], p[2]])
+         auxs.append(aux)
+         figs['entropydiagonallog'].add_trace(go.Scatter(
+            x=[row.areaentropy],
+            y=[row.wdistmean/aux],
+            mode='markers',
+            marker_size=10,
+            name=row.city,
+            ))
+    entropylogpearson = pearsonr(df2.areaentropy, np.log(df2.wdistmean/auxs))
+
+    figs['entropydiagonallog'].update_layout(
+            title="Entropy of areas vs. average path length norm. by map diagonal (Pearson: {:.2f})".\
+                    format(entropylogpearson[0]),
+            xaxis_title="Entropy of block area",
+            yaxis_title="Average shortest path length (normalized by diagonal)",
+            yaxis_type="log"
+            )
     figs['entropyhist'].add_trace(
             go.Histogram(x=df.areaentropy,
                 histnorm='probability',
@@ -166,7 +208,8 @@ def plot_distributions2(outdir):
             yaxis_type='log',
             )
     ########################################################## Save to file
-    plotly.offline.plot(figs['entropylog'], filename=pjoin(outdir, 'entropylog.html'), auto_open=False)
+    plotly.offline.plot(figs['entropyfilteredlog'], filename=pjoin(outdir, 'entropyfilteredlog.html'), auto_open=False)
+    plotly.offline.plot(figs['entropydiagonallog'], filename=pjoin(outdir, 'entropydiagonallog.html'), auto_open=False)
     plotly.offline.plot(figs['entropyhist'], filename=pjoin(outdir, 'entropyhist.html'), auto_open=False)
     plotly.offline.plot(figs['entropycvlog'], filename=pjoin(outdir, 'entropycvlog.html'), auto_open=False)
 
@@ -339,6 +382,7 @@ def plot_distributions(outdir):
     plotly.offline.plot(figs['boxplot'], filename=pjoin(outdir, 'boxplot.html'), auto_open=False)
     plotly.offline.plot(figs['entropy'], filename=pjoin(outdir, 'entropy.html'), auto_open=False)
     plotly.offline.plot(figs['entropylog'], filename=pjoin(outdir, 'entropylog.html'), auto_open=False)
+    plotly.offline.plot(figs['entropyfilteredlog'], filename=pjoin(outdir, 'entropyfilteredlog.html'), auto_open=False)
     plotly.offline.plot(figs['entropyz'], filename=pjoin(outdir, 'entropyz.html'), auto_open=False)
     plotly.offline.plot(figs['entropyhist'], filename=pjoin(outdir, 'entropyhist.html'), auto_open=False)
     plotly.offline.plot(figs['evenness'], filename=pjoin(outdir, 'evenness.html'), auto_open=False)
@@ -422,7 +466,7 @@ def get_components_from_raster(rasterdir, outdir):
     outpath = pjoin(outdir, 'components.pkl')
 
     if os.path.exists(outpath):
-        info('{} already exists. Skipping ...'.format(outdir))
+        info('{} already exists. Skipping ...'.format(outpath))
         return pkl.load(open(outpath, 'rb'))
 
     info('Reading raster graphics from {} ...'.format(rasterdir))
@@ -655,12 +699,23 @@ def add_weights_to_edges(graphsdir, weightdir):
             except:
                 coordu = np.array([ g.vs[e.source]['y'], g.vs[e.source]['x'] ])
                 coordv = np.array([ g.vs[e.target]['y'], g.vs[e.target]['x'] ])
-                e['weight'] = haversine(coordu, coordv, unit='km') # in meters
+                e['weight'] = haversine(coordu, coordv) # in meters
+
+            # remove it
+            # coordu = np.array([ g.vs[e.source]['y'], g.vs[e.source]['x'] ])
+            # coordv = np.array([ g.vs[e.target]['y'], g.vs[e.target]['x'] ])
+            # print(e['length'], haversine(coordu, coordv, unit='km'))
 
         igraph.write(g, outpath, 'graphml')
 
 ##########################################################
-def get_maps_ranges(graphsdir):
+def get_maps_ranges(graphsdir, outdir):
+    outpath = pjoin(outdir, 'lonlatranges.pkl')
+
+    if os.path.exists(outpath):
+        info('{} already exists. Skipping ...'.format(outpath))
+        return pkl.load(open(outpath, 'rb'))
+
     info('Getting map ranges ...')
     ranges = {}
     for filepath in os.listdir(graphsdir):
@@ -670,6 +725,8 @@ def get_maps_ranges(graphsdir):
         lon = g.vs['x']
         lat = g.vs['y']
         ranges[k] = np.array([np.min(lon), np.min(lat), np.max(lon), np.max(lat)])
+
+    pkl.dump(ranges, open(outpath, 'wb'))
     return ranges
 
 ##########################################################
@@ -682,20 +739,20 @@ def main():
     logging.basicConfig(format='[%(asctime)s] %(message)s',
     datefmt='%Y%m%d %H:%M', level=logging.INFO)
 
-    skeldir = pjoin(args.outdir, 'skel')
-    compdir = pjoin(args.outdir, 'comp')
-    weightdir = pjoin(args.outdir, 'weighted')
+    skeldir = pjoin(args.outdir, 'skel/')
+    compdir = pjoin(args.outdir, 'comp/')
+    weightdir = pjoin(args.outdir, 'weighted/')
 
     # generate_test_graphs(args.graphsdir)
 
     add_weights_to_edges(args.graphsdir, weightdir)
-    lonlatranges = get_maps_ranges(weightdir)
+    lonlatranges = get_maps_ranges(weightdir, args.outdir)
     plot_graph_raster(weightdir, skeldir)
     components = get_components_from_raster(skeldir, args.outdir)
     generate_components_vis(components, compdir)
     allareas = calculate_block_areas(components, lonlatranges, args.outdir)
     compute_statistics(weightdir, allareas, args.outdir)
-    plot_distributions2(args.outdir)
+    plot_distributions2(args.outdir, lonlatranges)
 
 if __name__ == "__main__":
     main()
