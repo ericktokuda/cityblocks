@@ -109,7 +109,7 @@ def plot_distributions2(outdir, lonlatranges):
     """
 
     figs = {}
-    for k in ['entropylog',  'entropyfilteredlog', 'entropydiagonallog', 'entropycvlog', 'entropyhist']:
+    for k in ['entropylog',  'entropyfilteredlog', 'entropydiagonallog', 'entropycvlog', 'entropyarea', 'entropydegree', 'entropyhist']:
         figs[k] = go.Figure()
 
     ########################################################## Area plots
@@ -207,11 +207,49 @@ def plot_distributions2(outdir, lonlatranges):
             yaxis_title="Coefficient of variation of the normalized shortest path length",
             yaxis_type='log',
             )
+
+    ########################################################## Entropy area
+    for _, row in df.iterrows():
+        figs['entropyarea'].add_trace(go.Scatter(
+            x=[row.areaentropy],
+            y=[row.wdistmean/row.areasum],
+            mode='markers',
+            marker_size=10,
+            name=row.city,
+            ))
+    entropycvlogpearson = pearsonr(df.areaentropy, np.log(df.wdiststd/df.areasum))
+    figs['entropyarea'].update_layout(
+            title="Entropy of areas vs. coefficient of variation of the distance (Pearson: {:.2f})".\
+                    format(entropycvlogpearson[0]),
+            xaxis_title="Entropy of block area",
+            yaxis_title="Coefficient of variation of the normalized by total area",
+            yaxis_type='log',
+            )
+    ########################################################## Entropy degrees
+    for _, row in df.iterrows():
+         figs['entropydegree'].add_trace(go.Scatter(
+            x=[row.degreeentropy],
+            y=[row.wdistmean/row.segmean],
+            mode='markers',
+            marker_size=10,
+            name=row.city,
+            ))
+    entropylogpearson = pearsonr(df.degreeentropy, np.log(df.wdistmean/df.segmean))
+    figs['entropydegree'].update_layout(
+            title="Entropy of degrees vs. average path length norm. by mean segment length (Pearson: {:.2f})".\
+                    format(entropylogpearson[0]),
+            xaxis_title="Entropy of block area",
+            yaxis_title="Average path length (normalized by mean segment length)",
+            yaxis_type="log"
+            )
+
     ########################################################## Save to file
     plotly.offline.plot(figs['entropyfilteredlog'], filename=pjoin(outdir, 'entropyfilteredlog.html'), auto_open=False)
     plotly.offline.plot(figs['entropydiagonallog'], filename=pjoin(outdir, 'entropydiagonallog.html'), auto_open=False)
     plotly.offline.plot(figs['entropyhist'], filename=pjoin(outdir, 'entropyhist.html'), auto_open=False)
     plotly.offline.plot(figs['entropycvlog'], filename=pjoin(outdir, 'entropycvlog.html'), auto_open=False)
+    plotly.offline.plot(figs['entropyarea'], filename=pjoin(outdir, 'entropyarea.html'), auto_open=False)
+    plotly.offline.plot(figs['entropydegree'], filename=pjoin(outdir, 'entropydegree.html'), auto_open=False)
 
     # figs['entropylog'].write_image("/tmp/foo.png")
 
@@ -563,9 +601,10 @@ def compute_statistics(graphsdir, allareas, outdir):
 
     info('Computing graph statistics...')
     fh = open(outpath, 'w', buffering=1)
-    fh.write('city,nvertices,nedges,nblocks,areasum,areamean,areastd,areacv,areamin,areamax,' \
+    fh.write('city,nvertices,nedges,degreeentropy,nblocks,areasum,areamean,areastd,areacv,areamin,areamax,' \
             'areaentropy,areaeveness,segmean,segstd,udistmean,udiststd,' \
             'wdistmean,wdiststd,betwvmean,betwvstd\n')
+
 
     segmean = {}
     segstd = {}
@@ -581,7 +620,7 @@ def compute_statistics(graphsdir, allareas, outdir):
     nedges = {}
     errors = []
 
-    for k in allareas.keys():
+    for k in sorted(allareas.keys()):
         info(' *' + k)
         try:
             filepath = pjoin(graphsdir, k + '.graphml')
@@ -639,7 +678,18 @@ def compute_statistics(graphsdir, allareas, outdir):
             arel = a / np.sum(a)
             entropy = -np.sum(arel * np.log(arel))
             evenness = np.exp(entropy) / len(arel)
-            st = [k, nvertices[k], nedges[k], len(a), np.sum(a),
+
+
+            ##########################################################
+            degrees =g.degree()
+            from itertools import groupby
+            N = np.sum(degrees)
+            freq = np.array([len(list(group)) for key, group in groupby(degrees)]) / N
+
+            degreeentropy = -np.sum(freq * np.log(freq))
+            ##########################################################
+
+            st = [k, nvertices[k], nedges[k], degreeentropy, len(a), np.sum(a),
                     np.mean(a), np.std(a), np.std(a)/np.mean(a),
                     np.min(a), np.max(a), entropy, evenness,
                     segmean[k], segstd[k],
@@ -649,6 +699,7 @@ def compute_statistics(graphsdir, allareas, outdir):
             fh.write(','.join([ str(s) for s in st]) + '\n')
         except:
             errors.append(k)
+
     info('Errors:')
     info(errors)
     fh.close()
