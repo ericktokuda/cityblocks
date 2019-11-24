@@ -110,7 +110,7 @@ def plot_distributions2(outdir, lonlatranges):
 
     figs = {}
     for k in ['meanpathvsdiventr',  'degrentrvsareaentr0001', 'degrentrvsareaentr001',
-              'degrentrvsareaentr01', 'degrentrvsareaentr1', 'degrentrvsareadiventr',
+              'degrentrvsareaentr01', 'degrentrvsareaentr1', 'degrentrvsareaentr10', 'degrentrvsareadiventr',
               'entropydiagonallog', 'meanpathcvvsareasdiventr',
               'meanpathvsdegrentr', 'entropyhist']:
         figs[k] = go.Figure()
@@ -189,6 +189,19 @@ def plot_distributions2(outdir, lonlatranges):
             yaxis_title="Entropy of degrees",
             )
 
+
+    for _, row in df.iterrows():
+         figs['degrentrvsareaentr10'].add_trace(go.Scatter(
+            x=[row['areasentropy10']],
+            y=[row.degreeentropy],
+            mode='markers', marker_size=10, name=row.city,))
+    entropylogpearson = pearsonr(df['areasentropy10'], df.degreeentropy)
+    figs['degrentrvsareaentr10'].update_layout(
+            title="Entropy of areas (bin=10) vs. Entropy of degree (Pearson: {:.2f})".\
+                    format(entropylogpearson[0]),
+            xaxis_title="Entropy of block area",
+            yaxis_title="Entropy of degrees",
+            )
     for _, row in df.iterrows():
          figs['degrentrvsareadiventr'].add_trace(go.Scatter(
             x=[row.areadiventropy],
@@ -512,8 +525,7 @@ def compute_statistics(graphsdir, allareas, outdir):
                 hist,_ = np.histogram(areas, bins=_ticks)
 
                 hist = hist[hist != 0] # Removing values=0
-                n = hist.shape[0]
-                relfreq = hist / n
+                relfreq = hist / np.sum(hist)
                 areasentropy[b] = -np.sum(relfreq * np.log(relfreq))
 
             ##########################################################
@@ -542,9 +554,9 @@ def compute_areas_entropy(outdir):
     allareas = pkl.load(open(pjoin(outdir, 'areas.pkl'), 'rb'))
     del allareas['0662602_Rolling_Hills']
 
-    binsize = [0.001, 0.01, 0.1, 1]
+    binsize = [0.001, 0.01, 0.1, 1, 10]
     for b in binsize:
-        binstr = 'areasentropy' + str(b)
+        binstr = 'areasentropy' + str(b).replace('.', '')
         areaentropy[binstr] = {}
         for idx, areas in allareas.items():
             areamax = np.max(areas)
@@ -558,8 +570,7 @@ def compute_areas_entropy(outdir):
             hist,_ = np.histogram(areas, bins=_ticks)
 
             hist = hist[hist != 0] # Removing values=0
-            n = hist.shape[0]
-            relfreq = hist / n
+            relfreq = hist / np.sum(hist)
 
             areaentropy[binstr][idx] = -np.sum(relfreq * np.log(relfreq))
     return areaentropy
@@ -662,18 +673,19 @@ def main():
     generate_components_vis(components, compdir)
     allareas = calculate_block_areas(components, lonlatranges, args.outdir)
     compute_statistics(weightdir, allareas, args.outdir)
+    plot_distributions2(args.outdir, lonlatranges)
+
     # areasentropy = compute_areas_entropy(args.outdir)
+    # print(list(areasentropy))
     # z = pd.DataFrame.from_dict(areasentropy)
     # z.index.names = ['city']
     # summary = pd.read_csv('/tmp/summary.csv')
     # summary.set_index('city', drop=True, inplace=True)
-    # print(z)
-    # print(summary)
+    # summary = summary.drop(['areasentropy0.001', 'areasentropy0.01',
+                            # 'areasentropy0.1', 'areasentropy1'], axis=1)
     # zz = pd.concat([summary, z], axis = 1, sort=True)
-    # zz.to_csv('/tmp/foo.csv')
-    # print(zz.shape)
-    # print(areasentropydf)
-    plot_distributions2(args.outdir, lonlatranges)
+    # zz.to_csv('/tmp/foo.csv', index_label='city')
+
 
 if __name__ == "__main__":
     main()
