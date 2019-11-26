@@ -356,7 +356,8 @@ def compute_statistics(graphsdir, allareas, outdir):
 
     for k in sorted(allareas.keys()):
         info(' *' + k)
-        if True:
+        # if True:
+        try:
             filepath = pjoin(graphsdir, k + '.graphml')
             g = igraph.Graph.Read(filepath)
 
@@ -443,8 +444,8 @@ def compute_statistics(graphsdir, allareas, outdir):
                   wdistfilteredmean, wdistfilteredstd, betwvmean, betwvstd,
                   ]
             fh.write(','.join([ str(s) for s in st]) + '\n')
-        # except:
-            # errors.append(k)
+        except:
+            errors.append(k)
 
     info('Errors:')
     info(errors)
@@ -534,8 +535,16 @@ def plot_distributions(outdir, lonlatranges):
             # yaxis_type="log"
             )
 
-    df2 = df.copy()
-    df2 = df2[ (df2.segmean > 130) & (df2.segmean < 135) ]
+    # df2 = df.copy()
+    # df2 = df2[ (df2.areasum > 5) & (df2.areasum < 7) ]
+    # print(df2.shape)
+    # d = 0
+    # delta = 1
+    # for d in range(60):
+        # df2 = df[ (df.areasum > d) & (df.areasum < d+delta) ].copy()
+        # print(df2.shape, pearsonr(df2.areadiventropy, df2.wdistmean/df2.segmean))
+        # d = d+delta
+
     if df2.shape[0] == 0: info('Empty dataframe after filtering')
     df2.city.to_csv(pjoin(outdir, 'cities_130.csv'), header=False, index=False)
     for _, row in df2.iterrows():
