@@ -468,7 +468,8 @@ def plot_distributions(outdir, lonlatranges):
               'degrentrvsareaentr01', 'degrentrvsareaentr1', 'degrentrvsareaentr10',
               'degrentrvsareadiventr',
               'entropydiagonallog', 'meanpathcvvsareasdiventr',
-              'meanpathvsdegrentr', 'entropyhist']:
+              'meanpathvsdegrentr',  'meanpathvsareaevenness', 'meanpathcvvsareaevenness',
+              'entropyhist', 'areaevennesshist']:
         figs[k] = go.Figure()
 
     ########################################################## Area plots
@@ -535,16 +536,7 @@ def plot_distributions(outdir, lonlatranges):
             # yaxis_type="log"
             )
 
-    # df2 = df.copy()
-    # df2 = df2[ (df2.areasum > 5) & (df2.areasum < 7) ]
-    # print(df2.shape)
-    # d = 0
-    # delta = 1
-    # for d in range(60):
-        # df2 = df[ (df.areasum > d) & (df.areasum < d+delta) ].copy()
-        # print(df2.shape, pearsonr(df2.areadiventropy, df2.wdistmean/df2.segmean))
-        # d = d+delta
-
+    df2 = df[ (df.areasum > 5) & (df.areasum < 7) ].copy()
     if df2.shape[0] == 0: info('Empty dataframe after filtering')
     df2.city.to_csv(pjoin(outdir, 'cities_130.csv'), header=False, index=False)
     for _, row in df2.iterrows():
@@ -671,6 +663,61 @@ def plot_distributions(outdir, lonlatranges):
             yaxis_type="log"
             )
 
+    
+    for _, row in df.iterrows():
+         figs['meanpathvsareaevenness'].add_trace(go.Scatter(
+            x=[row.areaeveness],
+            y=[np.log(row.wdistmean)],
+            mode='markers', marker_size=10, name=row.city,))
+    entropylogpearson = pearsonr(df.areaeveness, np.log(df.wdistmean))
+    figs['meanpathvsareaevenness'].update_layout(
+            title="Logarithm of the average path length vs. evenness of block areas (Pearson: {:.2f})".\
+                    format(entropylogpearson[0]),
+            xaxis_title="Evenness of block areas",
+            yaxis_title="Logarithm of the average path length",
+            # yaxis_type="log"
+            )
+
+    # print(np.log(df.wdiststd/df.wdistmean))
+    # for _, row in df.iterrows():
+         # figs['meanpathcvvsareaevenness'].add_trace(go.Scatter(
+            # x=[row.areaeveness],
+            # y=[np.log(df.wdiststd/df.wdistmean)],
+            # mode='markers', marker_size=10, name=row.city,))
+
+    # figs['meanpathcvvsareaevenness'].add_trace(go.Scatter(
+        # x=[row.areaeveness],
+        # y=[np.log(df.wdiststd/df.wdistmean)],
+        # mode='markers', marker_size=10, name=row.city,))
+
+    entropylogpearson = pearsonr(df.areaeveness, np.log(df.wdiststd/df.wdistmean))
+
+    figs['meanpathcvvsareaevenness'].add_trace(go.Scatter(
+        x=[df.areaeveness],
+        y=[np.log(df.wdiststd/df.wdistmean)],
+        mode='markers', marker_size=10,
+        line=go.scatter.Line(color="gray"),
+    ))
+
+    figs['meanpathcvvsareaevenness'].update_layout(
+            title="Logarithm of the coefficient of variation of the average path length vs. evenness of block areas (Pearson: {:.2f})".\
+                    format(entropylogpearson[0]),
+            xaxis_title="Evenness of block areas",
+            yaxis_title="Logarithm of the coefficient of variation of the average path length",
+            )
+
+    print('foo')
+
+    df2 = df.copy()
+    import plotly.express as px
+    df2['x'] = df.areaeveness
+    df2['y'] = np.log(df.wdiststd/df.wdistmean)
+    fig = px.scatter(df2, x='x', y='y', trendline="ols")
+    # fig.show()
+    plotly.offline.plot(fig,
+                        filename='/tmp/foo.html',
+                        auto_open=False)
+
     figs['entropyhist'].add_trace(
             go.Histogram(x=df.areadiventropy,
                 histnorm='probability',
@@ -681,6 +728,15 @@ def plot_distributions(outdir, lonlatranges):
             yaxis_title="Relative frequency",
             )
 
+    figs['areaevennesshist'].add_trace(
+            go.Histogram(x=df.areaeveness,
+                histnorm='probability',
+                ))
+    figs['areaevennesshist'].update_layout(
+            title="Evenness of block areas",
+            xaxis_title="Evenness of block areas",
+            yaxis_title="Relative frequency",
+            )
     ########################################################## Save to file
     for k in figs.keys():
         plotly.offline.plot(figs[k],
@@ -703,13 +759,13 @@ def main():
 
     # generate_test_graphs(args.graphsdir)
 
-    add_weights_to_edges(args.graphsdir, weightdir)
+    # add_weights_to_edges(args.graphsdir, weightdir)
     lonlatranges = get_maps_ranges(weightdir, args.outdir)
-    plot_graph_raster(weightdir, skeldir)
-    components = get_components_from_raster(skeldir, args.outdir)
-    generate_components_vis(components, compdir)
-    allareas = calculate_block_areas(components, lonlatranges, args.outdir)
-    compute_statistics(weightdir, allareas, args.outdir)
+    # plot_graph_raster(weightdir, skeldir)
+    # components = get_components_from_raster(skeldir, args.outdir)
+    # generate_components_vis(components, compdir)
+    # allareas = calculate_block_areas(components, lonlatranges, args.outdir)
+    # compute_statistics(weightdir, allareas, args.outdir)
     plot_distributions(args.outdir, lonlatranges)
 
     # areasentropy = compute_areas_entropy(args.outdir)
