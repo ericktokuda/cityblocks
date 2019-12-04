@@ -5,7 +5,7 @@
 #include <igraph.h>
 
 using namespace std;
-//clang++ src/toycities.cpp -I/tmp/del/include/igraph/ -L/tmp/del/lib/ -ligraph && ./a.out
+//clang++ src/toycities.cpp -I${HOME}/.local/igraph-0.7.1/include/igraph/ -L${HOME}/.local/igraph-0.7.1/lib/
 
 typedef struct {
 	int id;
