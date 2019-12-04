@@ -284,7 +284,7 @@ void test_get_edges_from_regular_grid() {
 			printf("id:%d (%d, %d) ", edges.at(i).id,
 					edges.at(i).uv[0],
 					edges.at(i).uv[1]
-					);
+				);
 			printf(" ");
 		}
 		printf("\n");
@@ -331,7 +331,6 @@ vector<Block> merge_blocks(int blockidx, int neighidx, vector<Block> blocks) {
 		keepidx = neighidx;
 		mergeidx = blockidx;
 	}
-	
 	//printf("\nblockidx:%d, neighidx:%d\n", blockidx, neighidx);
 	//printf("\nkeepidx:%d, mergeidx:%d\n", keepidx, mergeidx);
 	//print_block(blocks.at(keepidx));
@@ -367,6 +366,36 @@ vector<Block> merge_blocks(int blockidx, int neighidx, vector<Block> blocks) {
 	return blocks;
 }
 
+void test_igraph() {
+	igraph_real_t avg_path;
+	igraph_t graph;
+	igraph_vector_t dimvector;
+	igraph_vector_t edges;
+	int i;
+
+	igraph_vector_init(&dimvector, 2);
+	VECTOR(dimvector)[0]=30;
+	VECTOR(dimvector)[1]=30;
+	igraph_lattice(&graph, &dimvector, 0, IGRAPH_UNDIRECTED, 0, 1);
+
+	igraph_rng_seed(igraph_rng_default(), 42);
+	igraph_vector_init(&edges, 20);
+	for (i=0; i<igraph_vector_size(&edges); i++) {
+		VECTOR(edges)[i] = rand() % (int)igraph_vcount(&graph);
+	}
+
+	igraph_average_path_length(&graph, &avg_path, IGRAPH_UNDIRECTED, 1);
+	printf("Average path length (lattice):            %f\n", (double) avg_path);
+
+	igraph_add_edges(&graph, &edges, 0);
+	igraph_average_path_length(&graph, &avg_path, IGRAPH_UNDIRECTED, 1);
+	printf("Average path length (randomized lattice): %f\n", (double) avg_path);
+
+	igraph_vector_destroy(&dimvector);
+	igraph_vector_destroy(&edges);
+	igraph_destroy(&graph);
+}
+
 int main(int, char*[]) {
 	int blocksrows = 20, blockscols = 30;
 	//test_get_4connected_neighbours();
@@ -383,6 +412,8 @@ int main(int, char*[]) {
 	vector<Block> blocks = initialize_blocks(fblocks);
 	vector<int> fblockownership = initialize_fblocks_ownership(fblocks);
 
+	test_igraph();
+	return 0;
 	for (int i = 0; i < 5000; i++) {
 		if (blocks.size() == 1) break;
 		// sample a block
@@ -403,7 +434,6 @@ int main(int, char*[]) {
 
 		// Merge two blocks (update variables)
 		blocks = merge_blocks(blockidx, neighidx, blocks);
-		
 		printf("After blocksz:%ld, block.fblocks.sz:%ld,", blocks.size(),
 				blocks.at(blockidx <= neighidx ? blockidx : neighidx).fblocks.size());
 		printf("\n");
