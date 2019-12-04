@@ -300,11 +300,13 @@ vector<int> get_neighbour_blocks(Block block, vector<Fblock> fblocks,
 	for (int i = 0; i < block.fblocks.size(); i++) {
 		vector<int> aux = get_4connected_neighbours(block.fblocks.at(i), nrows, ncols);
 
-		printf("neighblocks:");
+		//printf("neighblocks:");
 
 		for (int j = 0; j < aux.size(); j++) {
-			neighblocks.push_back(fblocksownership.at(aux.at(j)));
-			printf("%d,", aux.at(j));
+			int neighid = fblocksownership.at(aux.at(j));
+			if (neighid != block.id)
+				neighblocks.push_back(neighid);
+			//printf("%d,", aux.at(j));
 		}
 	}
 	return neighblocks;
@@ -322,11 +324,6 @@ int get_idx_from_id(int id, Vectortype x) {
 }
 
 vector<Block> merge_blocks(int blockidx, int neighidx, vector<Block> blocks) {
-	//vector<int> fblocks1 = blocks.at(keepidx).fblocks;
-	//vector<int> fblocks2 = blocks.at(neighidx).fblocks;
-	//printf("\nInside %s", __func__);
-	//printf("\nBefore %ld", blocks.at(keepidx).fblocks.size());
-	//fblocks1.insert(fblocks1.end(), fblocks2.begin(), fblocks2.end());
 	int keepidx = blockidx;
 	int mergeidx = neighidx;
 
@@ -335,8 +332,12 @@ vector<Block> merge_blocks(int blockidx, int neighidx, vector<Block> blocks) {
 		mergeidx = blockidx;
 	}
 	
-	printf("\nblockidx:%d, neighidx:%d\n", blockidx, neighidx);
+	//printf("\nblockidx:%d, neighidx:%d\n", blockidx, neighidx);
 	printf("\nkeepidx:%d, mergeidx:%d\n", keepidx, mergeidx);
+	print_block(blocks.at(keepidx));
+	printf("checkpoint1\n");
+	print_block(blocks.at(mergeidx));
+	printf("checkpoint2\n");
 	//print_block(blocks.at(keepidx));
 	// Merge  fblocks
 	blocks.at(keepidx).fblocks.insert(blocks.at(keepidx).fblocks.end(),
@@ -394,12 +395,12 @@ int main(int, char*[]) {
 		Block block = blocks.at(blockidx);
 		int blockid = block.id;
 
-		printf("blockid:%d ", blockid);
+		printf(" blockid(x):%d,%d ", blockid, blockidx);
 
 		// get its neighbour blocks
-		//vector<int> neighsrepeated = get_neighbour_blocks(block, fblocks,
-				//fblockownership, blocksrows, blockscols);
-		vector<int> neighsrepeated = block.neigh;
+		vector<int> neighsrepeated = get_neighbour_blocks(block, fblocks,
+				fblockownership, blocksrows, blockscols);
+		//vector<int> neighsrepeated = block.neigh;
 
 		//printf("checkpoint8\n");
 		//printf(" neighblocks:");
@@ -407,22 +408,31 @@ int main(int, char*[]) {
 			//printf("%d,", neighsrepeated.at(j));
 		//}
 
+		//printf("neighsrepeated:");
+		//for (int xx = 0; xx < neighsrepeated.size(); xx++) {
+			//printf("%d,", neighsrepeated.at(xx));
+		//}
+		//printf("\n");
 		// sample a neighbour block, weighted by the num of neighbour fblocks
 		int neighid = neighsrepeated[rand() % neighsrepeated.size()];
 		int neighidx = get_idx_from_id<vector<Block>>(neighid, blocks);
-		printf(" neighid:%d, neighidx:%d ", neighid, neighidx);
+		printf("neighsrepeated.size:%ld neighid(x):%d,%d ", neighsrepeated.size(),
+				neighid, neighidx);
 
-		//printf("Bef blocksz:%ld, block.fblocks.sz:%ld,", blocks.size(), block.fblocks.size());
 		// Merge two blocks (update variables)
 		blocks = merge_blocks(blockidx, neighidx, blocks);
-		//printf("checkpoint16\n");
 		
 		printf("After blocksz:%ld, block.fblocks.sz:%ld,", blocks.size(),
 				blocks.at(blockidx <= neighidx ? blockidx : neighidx).fblocks.size());
 		printf("\n");
 
 		// Update fblockownership
+		for (int j = 0; j < blocks.size(); j++) {
+			Block bl = blocks.at(j);
+			for (int jj = 0; jj < bl.fblocks.size(); jj++) {
+				fblockownership.at(bl.fblocks.at(jj)) = bl.id;
+			}
+		}
 	}
 
-	//vector<Edge> x = get_edges_from_regular_grid(nodesrows, nodescols);
 }
