@@ -333,11 +333,11 @@ vector<Block> merge_blocks(int blockidx, int neighidx, vector<Block> blocks) {
 	}
 	
 	//printf("\nblockidx:%d, neighidx:%d\n", blockidx, neighidx);
-	printf("\nkeepidx:%d, mergeidx:%d\n", keepidx, mergeidx);
-	print_block(blocks.at(keepidx));
-	printf("checkpoint1\n");
-	print_block(blocks.at(mergeidx));
-	printf("checkpoint2\n");
+	//printf("\nkeepidx:%d, mergeidx:%d\n", keepidx, mergeidx);
+	//print_block(blocks.at(keepidx));
+	//printf("checkpoint1\n");
+	//print_block(blocks.at(mergeidx));
+	//printf("checkpoint2\n");
 	//print_block(blocks.at(keepidx));
 	// Merge  fblocks
 	blocks.at(keepidx).fblocks.insert(blocks.at(keepidx).fblocks.end(),
@@ -368,7 +368,7 @@ vector<Block> merge_blocks(int blockidx, int neighidx, vector<Block> blocks) {
 }
 
 int main(int, char*[]) {
-	int blocksrows = 2, blockscols = 3;
+	int blocksrows = 20, blockscols = 30;
 	//test_get_4connected_neighbours();
 	//test_get_grid_nodes();
 	//test_get_fundamental_blocks();
@@ -378,46 +378,28 @@ int main(int, char*[]) {
 	//srand(0);
 	srand(time(0));
 	
-	//printf("checkpoint2\n");
 	vector<Node> nodes = get_grid_nodes(blocksrows-1, blockscols-1);
 	vector<Fblock> fblocks = get_fundamental_blocks(blocksrows, blockscols);
 	vector<Block> blocks = initialize_blocks(fblocks);
 	vector<int> fblockownership = initialize_fblocks_ownership(fblocks);
 
-	//printf("checkpoint4\n");
-	//int secret = rand() % 10;
-	
-	for (int i = 0; i < 5; i++) {
-		printf("\n##########################################################Iter: %d\n", i);
-		//printf("checkpoint6\n");
+	for (int i = 0; i < 5000; i++) {
+		if (blocks.size() == 1) break;
 		// sample a block
 		int blockidx = rand() % blocks.size();
 		Block block = blocks.at(blockidx);
 		int blockid = block.id;
 
-		printf(" blockid(x):%d,%d ", blockid, blockidx);
 
 		// get its neighbour blocks
 		vector<int> neighsrepeated = get_neighbour_blocks(block, fblocks,
 				fblockownership, blocksrows, blockscols);
-		//vector<int> neighsrepeated = block.neigh;
 
-		//printf("checkpoint8\n");
-		//printf(" neighblocks:");
-		//for (int j = 0; j < neighsrepeated.size(); j++) {
-			//printf("%d,", neighsrepeated.at(j));
-		//}
-
-		//printf("neighsrepeated:");
-		//for (int xx = 0; xx < neighsrepeated.size(); xx++) {
-			//printf("%d,", neighsrepeated.at(xx));
-		//}
-		//printf("\n");
 		// sample a neighbour block, weighted by the num of neighbour fblocks
 		int neighid = neighsrepeated[rand() % neighsrepeated.size()];
 		int neighidx = get_idx_from_id<vector<Block>>(neighid, blocks);
-		printf("neighsrepeated.size:%ld neighid(x):%d,%d ", neighsrepeated.size(),
-				neighid, neighidx);
+		//printf("neighsrepeated.size:%ld neighid(x):%d,%d ", neighsrepeated.size(),
+				//neighid, neighidx);
 
 		// Merge two blocks (update variables)
 		blocks = merge_blocks(blockidx, neighidx, blocks);
@@ -434,5 +416,5 @@ int main(int, char*[]) {
 			}
 		}
 	}
-
+	return 0;
 }
