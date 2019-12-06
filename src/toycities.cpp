@@ -1,7 +1,9 @@
 #include <iostream>
-#include <stdlib.h>
 #include <algorithm>
 #include <vector>
+
+#include <array>
+#include <stdlib.h>
 #include <igraph.h>
 
 using namespace std;
@@ -82,18 +84,13 @@ void dijkstra(int graph[4][4], int src)
 	//int pos[2];
 //} Node;
 
-typedef int Node[3]; // id, x, y
-typedef int Edge[3]; // id, u, v
-
-//typedef struct {
-	//int id;
-	//int uv[2];
-	////vector<int> neigh;
-//} Edge;
+typedef array<int, 3> Node; // id, x, y
+typedef array<int, 3> Edge; // id, x, y
 
 typedef struct {
 	int id;
-	vector<int> nodes; // In a counter-clockwise order
+	vector<int> nodes; // In a counter-clockwise order, from topleft
+	vector<int> edges; // In a counter-clockwise order, from top
 	vector<int> neigh;
 } Fblock; // fundamental block
 
@@ -189,26 +186,48 @@ int get_top_left_node(int fblockid, int ncols) {
 	return fblockid - fblockid / ncols;
 }
 
+// Assuming the order defined in get_fundamental_blocks
+vector<int> get_nodes_from_fblock(int fblockid, int fblocksrows,
+		int fblockscols) {
+	int topleft = get_top_left_node(fblockid, fblockscols);
+	return vector<int> {topleft, topleft+1, topleft + fblockscols,
+		topleft + fblockscols - 1};
+}
+
+// Assuming the order defined in get_fundamental_blocks
+vector<int> get_edges_from_fblock(int fblockid, int fblocksrows,
+		int fblockscols) {
+	int top = fblockid;
+	int nhorizedges = fblockscols * (fblocksrows - 1);
+	int left = (fblockid / fblockscols) + fblockid +
+		nhorizedges;
+	return vector<int> {top, left+1, top+1, left};
+}
+
 // Get the blocks defined by the grid
 vector<Fblock> get_fundamental_blocks(int fblocksrows, int fblockscols) {
 	if (fblocksrows < 1 || fblockscols < 1) {
 		vector<Fblock> empty;
 		return empty;
 	}
+	int nodescols = fblockscols + 1;
 
 	vector<Fblock> fblocks;
 	for (int i = 0; i < fblocksrows; i++) {
 		for (int j = 0; j < fblockscols; j++) {
 			Fblock fblock;
 			fblock.id = i*fblockscols+j;
-			int topleft = get_top_left_node(fblock.id, fblockscols);
-			fblock.nodes.push_back(topleft); // clockwise 
-			fblock.nodes.push_back(topleft + 1);
-			fblock.nodes.push_back(topleft + fblockscols + 1);
-			fblock.nodes.push_back(topleft + fblockscols);
+
+			fblock.nodes =  get_nodes_from_fblock(fblock.id,
+					fblocksrows, fblockscols);
+
+			fblock.edges =  get_edges_from_fblock(fblock.id,
+					fblocksrows, fblockscols);
+
 			int fblockpos = i * (fblockscols - 1) + j;
-			fblock.neigh = get_4connected_neighbours(fblockpos, fblocksrows,
-					fblockscols);
+			fblock.neigh = get_4connected_neighbours(fblockpos,
+					fblocksrows, fblockscols);
+
 			fblocks.push_back(fblock);
 		}
 	}
@@ -302,40 +321,33 @@ vector<int> initialize_fblocks_ownership(vector<Fblock> fblocks) {
 }
 
 
-// Get the edges of the rectangular grid
+// Get the edges of the rectangular grid (horiz. then vertical,
+// from left-> right, top->bottom
+// Order here is important because later we are gonna get the
+// edge ids based on this order
 vector<Edge> get_edges_from_regular_grid(int nodesrows, int nodescols) {
 	int edgeid = 0;
 	vector<Edge> edges;
 
-	for (int i = 0; i < nodesrows - 1; i++) {
-		for (int j = 0; j < nodescols -1; j++) {
-			//Edge e1, e2;
-			int nodeid = i*nodescols + j;
 
-			Edge e1 = {edgeid++, nodeid, nodeid + 1};
-			edges.push_back(e1);
-
-			Edge e2 = {edgeid++, nodeid, nodeid + 1};
-			edges.push_back(e1);
-
-			//e2.id = edgeid++;
-			//e2.uv[0] = nodeid;
-			//e2.uv[1] = nodeid + nodescols;
-			//edges.push_back(e2);
+	// First the horizontal edges
+	for (int i = 0; i < nodesrows; i++) {
+		for (int j = 0; j < nodescols-1; j++) {
+			int leftnode = i*nodescols + j;
+			Edge edg = {edgeid++, leftnode, leftnode + 1};
+			edges.push_back(edg);
 		}
 	}
 
-	for (int i = 0; i < nodesrows - 1; i++) {
-			int nodeid = (i+1)*nodescols -1;
-			Edge e1 = {edgeid++, nodeid, nodeid + nodescols};
-			edges.push_back(e1);
+	// Then the vertical edges
+	for (int i = 0; i < nodesrows-1; i++) {
+		for (int j = 0; j < nodescols; j++) {
+			int topid = i*nodescols + j;
+			Edge edg = {edgeid++, topid, topid + nodesrows};
+			edges.push_back(edg);
+		}
 	}
 
-	for (int j = 0; j < nodescols - 1; j++) {
-			int nodeid = (nodesrows-1)*nodescols + j;
-			Edge e1 = {edgeid++, nodeid, nodeid + 1};
-			edges.push_back(e1);
-	}
 	return edges;
 }
 
@@ -352,10 +364,17 @@ void test_get_edges_from_regular_grid() {
 		printf("For a grid (%d, %d)\n",  nodesrows, nodescols);
 
 		for (int i = 0; i < edges.size(); i++) {
-			Edge edge = edges.at(i);
+			//Edge edge = edges.at(i);
+			int edgeid = edges.at(i)[0];
+			int edgeu = edges.at(i)[1];
+			int edgev = edges.at(i)[2];
 
 			//printf("id:%d, nodes:", fblock.id);
-			printf("id:%d (%d, %d) ", edges.at(i).id,
+			//printf("id:%d (%d, %d) ", edges.at(i)[0],
+					//edges.at(i)[1],
+					//edges.at(i)[2]
+				//);
+			printf("id:%d (%d, %d) ", edges.at(i)[0],
 					edges.at(i)[1],
 					edges.at(i)[2]
 				);
@@ -468,14 +487,6 @@ void test_igraph() {
 	igraph_vector_destroy(&dimvector);
 	igraph_vector_destroy(&edges);
 	igraph_destroy(&graph);
-}
-
-// Assuming a regular grid
-vector<Edge> get_edges_from_fblock(Fblock fblock) {
-	vector<int> nodes = fblock.nodes;
-	for (int i = 0; i < 4; i++) {
-		nodes.at(i)
-	}
 }
 
 //vector<Edge> get_edges_from_block(Block block) {
