@@ -77,20 +77,23 @@ void dijkstra(int graph[4][4], int src)
     printSolution(dist);
 }
 
-typedef struct {
-	int id;
-	int pos[2];
-} Node;
+//typedef struct {
+	//int id;
+	//int pos[2];
+//} Node;
+
+typedef int Node[3]; // id, x, y
+typedef int Edge[3]; // id, u, v
+
+//typedef struct {
+	//int id;
+	//int uv[2];
+	////vector<int> neigh;
+//} Edge;
 
 typedef struct {
 	int id;
-	int uv[2];
-	//vector<int> neigh;
-} Edge;
-
-typedef struct {
-	int id;
-	vector<int> nodes;
+	vector<int> nodes; // In a counter-clockwise order
 	vector<int> neigh;
 } Fblock; // fundamental block
 
@@ -157,10 +160,7 @@ void test_get_4connected_neighbours() {
 vector<Node> get_grid_nodes(int nodesrows, int nodescols) {
 	vector<Node> nodes;
 	for (int i = 0; i < nodesrows*nodescols; i++) {
-		Node aux;
-		aux.id = i;
-		aux.pos[0] = i / nodescols;
-		aux.pos[1] = i % nodescols;
+		Node aux = {i , i / nodescols, i % nodescols};
 		nodes.push_back(aux);
 	}
 	return nodes;
@@ -178,13 +178,18 @@ void test_get_grid_nodes() {
 		vector<Node> nodes =  get_grid_nodes(nrows, ncols);
 		printf("For a grid (%d, %d):\n",  nrows, ncols);
 		for (int k = 0; k < nodes.size(); k++) {
-			printf("i:%d id:%d pos:(%d, %d)\n", k, nodes.at(k).id, nodes.at(k).pos[0],
-					nodes.at(k).pos[1]);
+			printf("i:%d id:%d pos:(%d, %d)\n", k, nodes.at(k)[0],
+					nodes.at(k)[1], nodes.at(k)[2]);
 		}
 	}
 }
 
-// Get the blocks defined by the grid. Returns a vector of Fblock structures
+// Considering a grid of sizes nrows, ncols
+int get_top_left_node(int fblockid, int ncols) {
+	return fblockid - fblockid / ncols;
+}
+
+// Get the blocks defined by the grid
 vector<Fblock> get_fundamental_blocks(int fblocksrows, int fblockscols) {
 	if (fblocksrows < 1 || fblockscols < 1) {
 		vector<Fblock> empty;
@@ -196,10 +201,11 @@ vector<Fblock> get_fundamental_blocks(int fblocksrows, int fblockscols) {
 		for (int j = 0; j < fblockscols; j++) {
 			Fblock fblock;
 			fblock.id = i*fblockscols+j;
-			fblock.nodes.push_back(fblock.id);
-			fblock.nodes.push_back(fblock.id + 1);
-			fblock.nodes.push_back(fblock.id + fblockscols);
-			fblock.nodes.push_back(fblock.id + fblockscols + 1);
+			int topleft = get_top_left_node(fblock.id, fblockscols);
+			fblock.nodes.push_back(topleft); // clockwise 
+			fblock.nodes.push_back(topleft + 1);
+			fblock.nodes.push_back(topleft + fblockscols + 1);
+			fblock.nodes.push_back(topleft + fblockscols);
 			int fblockpos = i * (fblockscols - 1) + j;
 			fblock.neigh = get_4connected_neighbours(fblockpos, fblocksrows,
 					fblockscols);
@@ -303,34 +309,31 @@ vector<Edge> get_edges_from_regular_grid(int nodesrows, int nodescols) {
 
 	for (int i = 0; i < nodesrows - 1; i++) {
 		for (int j = 0; j < nodescols -1; j++) {
-			Edge e1, e2;
+			//Edge e1, e2;
 			int nodeid = i*nodescols + j;
-			e1.id = edgeid++;
-			e1.uv[0] = nodeid;
-			e1.uv[1] = nodeid + 1;
+
+			Edge e1 = {edgeid++, nodeid, nodeid + 1};
 			edges.push_back(e1);
-			e2.id = edgeid++;
-			e2.uv[0] = nodeid;
-			e2.uv[1] = nodeid + nodescols;
-			edges.push_back(e2);
+
+			Edge e2 = {edgeid++, nodeid, nodeid + 1};
+			edges.push_back(e1);
+
+			//e2.id = edgeid++;
+			//e2.uv[0] = nodeid;
+			//e2.uv[1] = nodeid + nodescols;
+			//edges.push_back(e2);
 		}
 	}
 
 	for (int i = 0; i < nodesrows - 1; i++) {
 			int nodeid = (i+1)*nodescols -1;
-			Edge e1;
-			e1.id = edgeid++;
-			e1.uv[0] = nodeid;
-			e1.uv[1] = nodeid + nodescols;
+			Edge e1 = {edgeid++, nodeid, nodeid + nodescols};
 			edges.push_back(e1);
 	}
 
 	for (int j = 0; j < nodescols - 1; j++) {
 			int nodeid = (nodesrows-1)*nodescols + j;
-			Edge e1;
-			e1.id = edgeid++;
-			e1.uv[0] = nodeid;
-			e1.uv[1] = nodeid + 1;
+			Edge e1 = {edgeid++, nodeid, nodeid + 1};
 			edges.push_back(e1);
 	}
 	return edges;
@@ -344,7 +347,8 @@ void test_get_edges_from_regular_grid() {
 	for (int k = 0; k < 3; k++) {
 		int nodesrows = testnrows[k];
 		int nodescols = testncols[k];
-		vector<Edge> edges = get_edges_from_regular_grid(nodesrows, nodescols);
+		vector<Edge> edges = get_edges_from_regular_grid(nodesrows,
+				nodescols);
 		printf("For a grid (%d, %d)\n",  nodesrows, nodescols);
 
 		for (int i = 0; i < edges.size(); i++) {
@@ -352,8 +356,8 @@ void test_get_edges_from_regular_grid() {
 
 			//printf("id:%d, nodes:", fblock.id);
 			printf("id:%d (%d, %d) ", edges.at(i).id,
-					edges.at(i).uv[0],
-					edges.at(i).uv[1]
+					edges.at(i)[1],
+					edges.at(i)[2]
 				);
 			printf(" ");
 		}
@@ -465,6 +469,22 @@ void test_igraph() {
 	igraph_vector_destroy(&edges);
 	igraph_destroy(&graph);
 }
+
+// Assuming a regular grid
+vector<Edge> get_edges_from_fblock(Fblock fblock) {
+	vector<int> nodes = fblock.nodes;
+	for (int i = 0; i < 4; i++) {
+		nodes.at(i)
+	}
+}
+
+//vector<Edge> get_edges_from_block(Block block) {
+	//vector<Fblock> fblocks;
+	//for (int i = 0; i < fblocks.size(); i++) {
+		//vector<int> v;
+		//fblocks.at(i).nodes
+	//}
+//}
 
 int main(int, char*[]) {
 	int blocksrows = 20, blockscols = 30;
