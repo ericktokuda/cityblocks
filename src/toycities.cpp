@@ -1,6 +1,7 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <map>
 
 #include <array>
 #include <stdlib.h>
@@ -27,6 +28,7 @@ typedef struct {
 typedef struct {
 	int id;
 	vector<int> fblocks;
+	vector<int> edges; // In a counter-clockwise order, from top
 } Block; // Agglomerate of blocks
 
 
@@ -102,6 +104,11 @@ void dijkstra(int graph[4][4], int src)
 }
 //##########################################################
 
+template <class T>
+vector<T> concat(vector<T> v1, vector<T> v2) {
+	v1.insert( v1.end(), v2.begin(), v2.end());
+	return v1;
+}
 // Debugging function to print Fblock inner structures
 void print_fblock(Fblock fblock) {
 	printf("Fblockid: %d\nnodes:", fblock.id);
@@ -187,11 +194,15 @@ void test_get_grid_nodes() {
 }
 
 // Assuming the order defined in get_fundamental_blocks
-vector<int> get_nodes_from_fblock(int fblockid, int fblocksrows,
-		int fblockscols) {
-	int topleft = fblockid + (fblockid / fblockscols);
+vector<int> get_nodes_from_fblock(int fblockid,
+								  int fblockrows,
+								  int fblockcols) {
+	if (fblockrows < 1 || fblockcols < 1)
+		return vector<int> ();
+
+	int topleft = fblockid + (fblockid / fblockcols);
 	return vector<int> {topleft, topleft+1,
-		topleft + fblockscols, topleft + fblockscols - 1};
+		topleft + 2 + fblockcols, topleft + 1 + fblockcols};
 }
 
 void test_get_nodes_from_fblock() {
@@ -199,32 +210,62 @@ void test_get_nodes_from_fblock() {
 	int fblockrows[] = {0, 2, 4};
 	int fblockcols[] = {0, 2, 4};
 
-	//printf("%s...\n", __func__);
-	//for (int j = 0; j < 3; j++) {
-		//printf("For a grid (%d, %d):\n",  nrows, ncols);
-//vector<int> get_nodes_from_fblock(int fblockid, int fblocksrows,
-		//for (int k = 0; k < nodes.size(); k++) {
-			//printf("i:%d id:%d pos:(%d, %d)\n", k, nodes.at(k)[0],
-					//nodes.at(k)[1], nodes.at(k)[2]);
-		//}
-	//}
+	printf("Started %s...\n", __func__);
+	for (int j = 0; j < 3; j++) {
+		//setbuf(stdout, NULL);
+		printf("For a grid:(%d, %d) and fblockid:%d, nodes:",
+			   fblockrows[j], fblockcols[j], fblockids[j]);
+		vector<int> nodes = get_nodes_from_fblock(fblockids[j],
+												  fblockrows[j],
+												  fblockcols[j]);
+		for (int k = 0; k < nodes.size(); k++) {
+			printf("%d,", nodes.at(k));
+		}
+	}
+	printf("\nFinished %s\n", __func__);
 }
 
 // Assuming the order defined in get_fundamental_blocks
-vector<int> get_edges_from_fblock(int fblockid, int fblocksrows,
-		int fblockscols) {
+vector<int> get_edges_from_fblock(int fblockid,
+								  int fblockrows,
+								  int fblockcols) {
+	if (fblockrows < 1 || fblockcols < 1)
+		return vector<int> ();
+
+	//int nodesrows = fblockrows + 1, nodescols = fblockcols + 1;
 	int top = fblockid;
-	int nhorizedges = fblockscols * (fblocksrows - 1);
-	int left = (fblockid / fblockscols) + fblockid +
-		nhorizedges;
-	return vector<int> {top, left+1, top+1, left};
+	int nhorizedges = fblockcols * (fblockrows + 1);
+	int left = (fblockid / fblockcols) + fblockid + nhorizedges;
+	return vector<int> {top, left+1, top+fblockcols, left};
+}
+
+
+void test_get_edges_from_fblock() {
+	int fblockids[] = {1, 2, 3};
+	int fblockrows[] = {0, 2, 4};
+	int fblockcols[] = {0, 2, 3};
+
+	printf("Started %s...\n", __func__);
+	for (int j = 0; j < 3; j++) {
+		//setbuf(stdout, NULL);
+		printf("For a grid:(%d, %d) and fblockid:%d, edges:",
+			   fblockrows[j], fblockcols[j], fblockids[j]);
+		vector<int> edges = get_edges_from_fblock(fblockids[j],
+												  fblockrows[j],
+												  fblockcols[j]);
+		for (int k = 0; k < edges.size(); k++) {
+			printf("%d,", edges.at(k));
+		}
+	}
+	printf("\nFinished %s\n", __func__);
 }
 
 // Get the blocks defined by the grid
-vector<Fblock> get_fundamental_blocks(int fblocksrows, int fblockscols) {
+vector<Fblock> get_fundamental_blocks(int fblocksrows,
+		int fblockscols) {
+
 	if (fblocksrows < 1 || fblockscols < 1) {
-		vector<Fblock> empty;
-		return empty;
+		return vector<Fblock>();
 	}
 	int nodescols = fblockscols + 1;
 
@@ -234,7 +275,7 @@ vector<Fblock> get_fundamental_blocks(int fblocksrows, int fblockscols) {
 			Fblock fblock;
 			fblock.id = i*fblockscols+j;
 
-			fblock.nodes =  get_nodes_from_fblock(fblock.id,
+			fblock.nodes = get_nodes_from_fblock(fblock.id,
 					fblocksrows, fblockscols);
 
 			fblock.edges =  get_edges_from_fblock(fblock.id,
@@ -254,19 +295,21 @@ vector<Fblock> get_fundamental_blocks(int fblocksrows, int fblockscols) {
 void test_get_fundamental_blocks() {
 	int testnrows[] = {1, 2, 3};
 	int testncols[] = {0, 2, 4};
-
 	printf("%s...\n", __func__);
 	for (int k = 0; k < 3; k++) {
 		int nodesrows = testnrows[k];
 		int nodescols = testncols[k];
-		vector<Fblock> fblocks = get_fundamental_blocks(nodesrows, nodescols);
+		vector<Fblock> fblocks = get_fundamental_blocks(nodesrows,
+														nodescols);
 		printf("For a grid (%d, %d):\n",  nodesrows, nodescols);
-
 		for (int i = 0; i < fblocks.size(); i++) {
 			printf("%d id:%d nodes:", i, fblocks.at(i).id);
 			Fblock fblock = fblocks.at(i);
 			for (int j = 0; j < fblock.nodes.size(); j++)
 				printf("%d,", fblock.nodes.at(j));
+			printf(" edges:");
+			for (int j = 0; j < fblock.edges.size(); j++)
+				printf("%d,", fblock.edges.at(j));
 			printf(" neigh:");
 			for (int j = 0; j < fblock.neigh.size(); j++)
 				printf("%d,", fblock.neigh.at(j));
@@ -275,16 +318,15 @@ void test_get_fundamental_blocks() {
 	}
 }
 
-// Assigns each Block structure to a corresponding fblock for each of element
-// in the vector of Fblock structures
+// Assigns each Fblock structure to a single Block (1:1 relationship)
 vector<Block> initialize_blocks(vector<Fblock> fblocks) {
 	vector<Block> blocks;
 	for (int i = 0; i < fblocks.size(); i++) {
-		Block aux;
-		aux.id = i;
-		aux.fblocks.push_back(fblocks.at(i).id);
-		//aux.neigh = fblocks.at(i).neigh;
-		blocks.push_back(aux);
+		Block block;
+		block.id = i;
+		block.fblocks.push_back(fblocks.at(i).id);
+		//block.neigh = fblocks.at(i).neigh;
+		blocks.push_back(block);
 	}
 	return blocks;
 }
@@ -292,7 +334,6 @@ vector<Block> initialize_blocks(vector<Fblock> fblocks) {
 void test_initialize_blocks() {
 	int testnrows[] = {1, 2, 3};
 	int testncols[] = {0, 2, 4};
-
 	printf("%s...\n", __func__);
 	for (int k = 0; k < 3; k++) {
 		int nodesrows = testnrows[k];
@@ -307,6 +348,9 @@ void test_initialize_blocks() {
 			for (int j = 0; j < fblock.nodes.size(); j++)
 				printf("%d,", fblock.nodes.at(j));
 
+			printf(" Edges:");
+			for (int j = 0; j < fblock.edges.size(); j++)
+				printf("%d,", fblock.edges.at(j));
 			printf(" Neigh:");
 			for (int j = 0; j < fblock.neigh.size(); j++)
 				printf("%d,", fblock.neigh.at(j));
@@ -314,11 +358,11 @@ void test_initialize_blocks() {
 		}
 
 		vector<Block> blocks = initialize_blocks(fblocks);
-		printf("Output (derived blocks):\n");
+		printf("Output (initialized blocks):\n");
 		for (int i = 0; i < blocks.size(); i++) {
 			Block block = blocks.at(i);
 
-			printf("id:%d, nodes:", block.id);
+			printf("id:%d, fblock:", block.id);
 			for (int j = 0; j < block.fblocks.size(); j++)
 				printf("%d,", block.fblocks.at(j));
 
@@ -327,15 +371,27 @@ void test_initialize_blocks() {
 	}
 }
 
-// Assigns each Block structure to a corresponding fblock for each of element
-// in the vector of Fblock structures
-vector<int> initialize_fblocks_ownership(vector<Fblock> fblocks) {
+// Assigns each Fblock structure to its Block container.
+// Vector indices corresponds to the fblock ids.
+vector<int> initialize_fblocks_ownership(vector<Block> blocks) {
 	vector<int> ownership;
-	for (int i = 0; i < fblocks.size(); i++)
-		ownership.push_back(i);
+	map<int, int> ownershiphash;
+	for (int i = 0; i < blocks.size(); i++) {
+		int blockid = blocks.at(i).id;
+		Block block = blocks.at(i);
+		for (int j = 0; j < block.fblocks.size(); j++) {
+			int fblockid = block.fblocks.at(j);
+			ownershiphash[fblockid] = blockid;
+		}
+	}
+
+	// Assuming a continuous map of fblocks->block exists
+	for (int i = 0; i < ownershiphash.size(); i++) {
+		int blockid = ownershiphash.at(i);
+		ownership.push_back(blockid);
+	}
 	return ownership;
 }
-
 
 // Get the edges of the rectangular grid (horiz. then vertical,
 // from left-> right, top->bottom
@@ -425,53 +481,41 @@ void test_get_neighbour_blocks() {
 	// TODO
 }
 
-template <class Vectortype>
-int get_idx_from_id(int id, Vectortype x) {
+template <class T>
+int get_idx_from_id(int id, T x) {
 	for (int i = 0; i < x.size(); i++)
 		if (x.at(i).id == id) return i;
 	return -1;
 }
 
-vector<Block> merge_blocks(int blockidx, int neighidx, vector<Block> blocks) {
+template <class T>
+vector<T> merge_vectors(vector<T> v1, vector<T> v2) {
+	v1 = concat<T>(v1, v2);
+	sort(v1.begin(), v1.end() );
+	v1.erase(unique(v1.begin(), v1.end() ), v1.end());
+	return v1;
+}
+
+vector<Block> merge_blocks(int blockidx, int neighidx,
+						   vector<Block> blocks, vector<Fblock> fblocks) {
 	int keepidx = blockidx;
 	int mergeidx = neighidx;
 
-	if (neighidx < blockidx) {
+	if (neighidx < blockidx) { // Choose which block to keep
 		keepidx = neighidx;
 		mergeidx = blockidx;
 	}
-	//printf("\nblockidx:%d, neighidx:%d\n", blockidx, neighidx);
-	//printf("\nkeepidx:%d, mergeidx:%d\n", keepidx, mergeidx);
-	//print_block(blocks.at(keepidx));
-	//printf("checkpoint1\n");
-	//print_block(blocks.at(mergeidx));
-	//printf("checkpoint2\n");
-	//print_block(blocks.at(keepidx));
-	// Merge  fblocks
-	blocks.at(keepidx).fblocks.insert(blocks.at(keepidx).fblocks.end(),
-			blocks.at(mergeidx).fblocks.begin(),
-			blocks.at(mergeidx).fblocks.end());
-	//print_block(blocks.at(keepidx));
 
-	// Merge neighbours
-	//vector<int> neigh = blocks.at(keepidx).neigh;
-	//neigh.insert(blocks.at(keepidx).neigh.end(), // concatenate
-			//blocks.at(mergeidx).neigh.begin(),
-			//blocks.at(mergeidx).neigh.end());
+	// Merge fblocks
+	blocks.at(keepidx).fblocks = concat(blocks.at(keepidx).fblocks,
+										blocks.at(mergeidx).fblocks);
+	// Merge edges
+	vector<int> e1 = blocks.at(keepidx).edges;
+	vector<int> e2 = blocks.at(mergeidx).edges;
+	
+	blocks.at(keepidx).edges = merge_vectors<int>(e1, e2);
 
-
-	//sort(neigh.begin(), neigh.end()); // remove duplicates
-	//neigh.erase(unique(neigh.begin(), neigh.end( ), neigh.end()));
-
-
-	//blocks.at(keepidx).fblocks.insert(fblocks1.end(), fblocks2.begin(), fblocks2.end());
-			
-
-	//printf("checkpoint10\n");
-	//printf("\nMiddle %ld", blocks.at(keepidx).fblocks.size());
 	blocks.erase(blocks.begin() + mergeidx);
-	//printf("\nAfter %ld", blocks.at(keepidx).fblocks.size());
-	//printf("checkpoint12\n");
 	return blocks;
 }
 
@@ -505,38 +549,31 @@ void test_igraph() {
 	igraph_destroy(&graph);
 }
 
-//vector<Edge> get_edges_from_block(Block block) {
-	//vector<Fblock> fblocks;
-	//for (int i = 0; i < fblocks.size(); i++) {
-		//vector<int> v;
-		//fblocks.at(i).nodes
-	//}
-//}
-
 int main(int, char*[]) {
 	int blocksrows = 20, blockscols = 30;
 	int nodesrows = blocksrows - 1, nodescols = blockscols -1;
 	//test_get_4connected_neighbours();
 	//test_get_grid_nodes();
+	//test_get_edges_from_fblock();
 	//test_get_fundamental_blocks();
-	printf("END\n");
-	return 0;
 	//test_initialize_blocks();
 	//test_get_edges_from_regular_grid();
 	
+
 	//srand(0);
 	srand(time(0));
 	
-	vector<Node> nodes = get_grid_nodes(nodesrows, nodescols);
-	for (int i = 0; i < nodes.size(); i++) {
-		printf("%d,", nodes.at(i)[0]);
-		printf("%d,", nodes.at(i)[1]);
-		printf("%d\n", nodes.at(i)[2]);
-	}
+	//vector<Node> nodes = get_grid_nodes(nodesrows, nodescols);
+	//for (int i = 0; i < nodes.size(); i++) {
+		//printf("%d,", nodes.at(i)[0]);
+		//printf("%d,", nodes.at(i)[1]);
+		//printf("%d\n", nodes.at(i)[2]);
+	//}
 
 	vector<Fblock> fblocks = get_fundamental_blocks(blocksrows, blockscols);
 	vector<Block> blocks = initialize_blocks(fblocks);
-	vector<int> fblockownership = initialize_fblocks_ownership(fblocks);
+	vector<int> fblockownership = initialize_fblocks_ownership(blocks);
+
 
 	   /* Let us create the example graph discussed above */
     //int graph[V][V] = { { 0, 4, 0, 0, 0, 0, 0, 8, 0 },
@@ -559,7 +596,6 @@ int main(int, char*[]) {
     dijkstra(graph, 2);
 
 	//test_igraph();
-	return 0;
 	for (int i = 0; i < 5000; i++) {
 		if (blocks.size() == 1) break;
 		// sample a block
@@ -579,7 +615,7 @@ int main(int, char*[]) {
 				//neighid, neighidx);
 
 		// Merge two blocks (update variables)
-		blocks = merge_blocks(blockidx, neighidx, blocks);
+		blocks = merge_blocks(blockidx, neighidx, blocks, fblocks);
 		printf("After blocksz:%ld, block.fblocks.sz:%ld,", blocks.size(),
 				blocks.at(blockidx <= neighidx ? blockidx : neighidx).fblocks.size());
 		printf("\n");
@@ -594,3 +630,4 @@ int main(int, char*[]) {
 	}
 	return 0;
 }
+

@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 xnet.py
 *.swp
+tags
 
 # C extensions
 *.so
