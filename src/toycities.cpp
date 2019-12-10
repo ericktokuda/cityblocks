@@ -1,8 +1,10 @@
 #include <iostream>
+#include <fstream>
 #include <algorithm>
 #include <vector>
 #include <map>
 #include <set>
+#include <cstdio>
 
 #include <array>
 #include <stdlib.h>
@@ -31,11 +33,6 @@ typedef struct {
 	vector<int> fblocks;
 	vector<int> edges; // In a counter-clockwise order, from top
 } Block; // Agglomerate of blocks
-
-
-
-
-
 
 //########################################################## IGRAPH
 // Number of vertices in the graph
@@ -87,7 +84,7 @@ float dijkstra(vector<vector<int>> graph, int src)
 	//printSolution(dist);
 	int acc = 0, nfinite = 0;
 	for (int i = 0; i < dist.size(); i++) {
-		if (dist[i] < INT_MAX) {
+		if (dist[i] > 0 && dist[i] < INT_MAX) {
 			acc += dist[i];
 			nfinite ++;
 		}
@@ -589,23 +586,40 @@ vector<vector<int>> get_adjmatrix_from_map(vector<Block> blocks, vector<Fblock> 
 		}
 		//totaledges += block.edges.size();
 	}
-	printf("nedges:%ld\n", alledgeids.size());
+	//printf("nedges:%ld\n", alledgeids.size());
 	return adj;
 }
 
-//void print_adj_matrix(vector<vector<int>> adj) {
-//unsigned n = adj.size();
-//for (int i = 0; i < n; i++) {
-//for (int j = 0; j < n; j++) {
-//printf(" %s", adj[i][j] ? "-" : " ");
-//}
-//printf("\n");
-//}
-//}
+vector<int> get_all_edges_flattened(vector<Block> blocks, vector<Fblock> fblocks,
+									vector<Edge> edges, int fblockrows,
+									int fblockcols) {
+	int nodesrows = fblockrows + 1, nodescols = fblockcols + 1;
+	int nedges = (nodescols-1)*nodesrows + (nodesrows-1)*nodescols;
+	vector<int> edgesflat(nedges*2, 0);
+	set<int> alledgeids;
+
+	for (int i = 0; i < blocks.size(); i++) {
+		Block block = blocks[i];
+		for (int j = 0; j < block.edges.size(); j++) {
+			Edge edge = edges[block.edges[j]];
+			alledgeids.insert(edge[0]);
+		}
+	}
+
+	int edgeind = 0;
+	for (set<int>::iterator it = alledgeids.begin(); it != alledgeids.end(); ++it) {
+		Edge edge = edges[*it];
+		edgesflat[edgeind++] = edge[1];
+		edgesflat[edgeind++] = edge[2];
+	}
+	//printf("nblocks:%d, theonedges:%d, edgeind:%d\n", blocks.size(), nedges, edgeind);
+	return edgesflat;
+}
 
 //##########################################################
 int main(int, char*[]) {
-	int fblockrows = 3, fblockcols = 4;
+	//int fblockrows = 3, fblockcols = 4;
+	int fblockrows = 50, fblockcols = 50;
 	int nodesrows = fblockrows + 1, nodescols = fblockcols + 1;
 	//test_get_4connected_neighbours();
 	//test_get_grid_nodes();
@@ -623,40 +637,19 @@ int main(int, char*[]) {
 	vector<Fblock> fblocks = get_fundamental_blocks(fblockrows, fblockcols);
 	vector<Block> blocks = initialize_blocks(fblocks);
 	vector<int> fblockownership = initialize_fblocks_ownership(blocks);
-
-
-	/* Let us create the example graph discussed above */
-	//int graph[V][V] = { { 0, 4, 0, 0, 0, 0, 0, 8, 0 },
-	//{ 4, 0, 8, 0, 0, 0, 0, 11, 0 },
-	//{ 0, 8, 0, 7, 0, 4, 0, 0, 2 },
-	//{ 0, 0, 7, 0, 9, 14, 0, 0, 0 },
-	//{ 0, 0, 0, 9, 0, 10, 0, 0, 0 },
-	//{ 0, 0, 4, 14, 10, 0, 2, 0, 0 },
-	//{ 0, 0, 0, 0, 0, 2, 0, 1, 6 },
-	//{ 8, 11, 0, 0, 0, 0, 1, 0, 7 },
-	//{ 0, 0, 2, 0, 0, 0, 6, 7, 0 } };
-
-	//int graph[4][4] = {
-	//{ 0, 0, 0, 1 },
-	//{ 0, 0, 1, 1 },
-	//{ 0, 1, 0, 1 },
-	//{ 1, 1, 1, 0 }
-	//};
-
-	//dijkstra(graph, 2);
-
-	//test_igraph();
 	vector<vector<int>> adj = get_adjmatrix_from_map(blocks, fblocks, edges,
 													 fblockrows, fblockcols);
-	//print_adj_matrix(adj);
-	//return 0;
+	//ofstream _stream;
+	FILE *fh = fopen("/tmp/result.txt", "w");
+	fprintf(fh, "nblocks,avgpathlength\n");
+	setbuf(fh, NULL);
+	//_stream.open ("/tmp/result.txt");
 	for (int i = 0; i < 5000; i++) {
 		if (blocks.size() == 1) break;
 		// sample a block
 		int blockidx = rand() % blocks.size();
 		Block block = blocks[blockidx];
 		int blockid = block.id;
-
 
 		// get its neighbour blocks
 		vector<int> neighsrepeated = get_neighbour_blocks(block,
@@ -669,14 +662,8 @@ int main(int, char*[]) {
 		int neighid = neighsrepeated[rand() % neighsrepeated.size()];
 		int neighidx = get_idx_from_id<vector<Block>>(neighid, blocks);
 
-		//printf("neighsrepeated.size:%ld neighid(x):%d,%d ", neighsrepeated.size(),
-		//neighid, neighidx);
-
 		// Merge two blocks (update variables)
 		blocks = merge_blocks(blockidx, neighidx, blocks, fblocks);
-		printf("After blocksz:%ld, block.fblocks.sz:%ld,", blocks.size(),
-			   blocks[blockidx <= neighidx ? blockidx : neighidx].fblocks.size());
-		printf("\n");
 
 		// Update fblockownership
 		for (int j = 0; j < blocks.size(); j++) {
@@ -684,13 +671,31 @@ int main(int, char*[]) {
 			for (int jj = 0; jj < bl.fblocks.size(); jj++) {
 				fblockownership[bl.fblocks[jj]] = bl.id;
 			}
-			vector<vector<int>> adj = get_adjmatrix_from_map(blocks, fblocks, edges,
-															 fblockrows, fblockcols);
-			//dijkstra(adj, 0);
-			float x = compute_average_path_length(adj);
-			printf("%f ", x);
-			//print_adj_matrix(adj);
 		}
+
+		//vector<vector<int>> adj = get_adjmatrix_from_map(blocks, fblocks, edges,
+		//fblockrows, fblockcols);
+		//float l = compute_average_path_length(adj);
+		
+		igraph_vector_t ig_edges;
+		vector<int> edgesflat = get_all_edges_flattened(blocks, fblocks, edges,
+														fblockrows, fblockcols);
+		igraph_real_t edgesigraph[edgesflat.size()];
+		copy(edgesflat.begin(), edgesflat.end(), edgesigraph);
+		igraph_vector_view(&ig_edges, edgesigraph, (igraph_real_t)edgesflat.size());
+		igraph_t ig_graph;
+		igraph_integer_t nn = nodesrows*nodescols;
+		int ret = igraph_create(&ig_graph, &ig_edges, (igraph_integer_t) nn,
+								IGRAPH_UNDIRECTED);
+		igraph_real_t avg_path;
+		igraph_average_path_length(&ig_graph, &avg_path, IGRAPH_UNDIRECTED, 1);
+		igraph_destroy(&ig_graph);
+		
+		//_stream << << avg_path << endl;
+		fprintf(fh, "%ld,%g\n", blocks.size(), avg_path);
+		//igraph_delete_edges(igraph_t *graph, igraph_es_t edges);
+		//printf("nblocks:%ld, avgpathlength:%f\n", blocks.size(), l);
+		//print_adj_matrix(adj);
 	}
 	return 0;
 }
