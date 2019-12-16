@@ -6,6 +6,8 @@ xnet.py
 *.swp
 tags
 build/
+lib/*
+bin/*
 
 # C extensions
 *.so

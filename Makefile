@@ -8,25 +8,28 @@ RM := rm -f
 SRCEXT := cpp
 SOURCES := $(shell find ${SRCDIR} -type f -name *.${SRCEXT})
 OBJECTS := $(patsubst ${SRCDIR}/%,${BUILDDIR}/%,${SOURCES:.${SRCEXT}=.o})
-CFLAGS := -g # -Wall
+CXXFLAGS := -g -Wall -O3
 
-INC := -I$${HOME}/.local/igraph-0.7.1/include/igraph/
-LIB := -L$${HOME}/.local/igraph-0.7.1/lib/ -ligraph
+INC := -I$${HOME}/.local/igraph-0.7.1/include/igraph/ \
+	-I$${HOME}/projects/Catch2/single_include/ -I./include/
+LIB := -L$${HOME}/.local/igraph-0.7.1/lib/ -ligraph -L./lib/
+
+all: ${TARGET}
 
 ${TARGET}: ${OBJECTS}
-	@echo " Linking..."
-	@echo " ${CXX} $^ -o ${TARGET} ${LIB}"
 	${CXX} $^ -o ${TARGET} ${LIB}
 
 ${BUILDDIR}/%.o: ${SRCDIR}/%.${SRCEXT}
+	$(info Building libs...)
 	@mkdir -p ${BUILDDIR}
-	@echo " ${CXX} ${CFLAGS} ${INC} -c -o $@ $<"; ${CXX} ${CFLAGS} ${INC} -c -o $@ $<
+	${CXX} ${CXXFLAGS} ${INC} -c -o $@ $<
 
 clean:
-	@echo " Cleaning...";
-	@echo " ${RM} -r ${BUILDDIR} ${TARGET}"; ${RM} -r ${BUILDDIR} ${TARGET}
+	$(info Cleaning...)
+	${RM} -r ${BUILDDIR} ${TARGET}
 
 test:
-	${CXX} ${CFLAGS} test/tester.cpp ${INC} ${LIB} -o bin/tester
+	$(info Running tests...)
+	${CXX} ${CXXFLAGS} test/tester.cpp ${INC} ${LIB} -o bin/tester
 
 .PHONY: all clean

@@ -1,4 +1,3 @@
-#include "toycities.hpp"
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -6,6 +5,7 @@
 #include <map>
 #include <set>
 #include <cstdio>
+#include "catch2/catch.hpp"
 
 #include <array>
 #include <stdlib.h>
@@ -17,6 +17,23 @@ using namespace std;
 
 #include <limits.h>
 #include <stdio.h>
+
+
+typedef array<int, 3> Node; // id, x, y
+typedef array<int, 3> Edge; // id, x, y
+
+typedef struct {
+	int id;
+	vector<int> nodes; // In a counter-clockwise order, from topleft
+	vector<int> edges; // In a counter-clockwise order, from top
+	vector<int> neigh;
+} Fblock; // fundamental block
+
+typedef struct {
+	int id;
+	vector<int> fblocks;
+	vector<int> edges; // In a counter-clockwise order, from top
+} Block; // Agglomerate of blocks
 
 //########################################################## IGRAPH
 // Number of vertices in the graph
@@ -251,6 +268,7 @@ vector<Fblock> get_fundamental_blocks(int fblocksrows,
 	if (fblocksrows < 1 || fblockscols < 1)
 		return vector<Fblock>();
 
+	int nodescols = fblockscols + 1;
 	vector<Fblock> fblocks;
 
 	for (int i = 0; i < fblocksrows; i++) {
@@ -420,9 +438,9 @@ void test_get_edges_from_regular_grid() {
 
 		for (int i = 0; i < edges.size(); i++) {
 			//Edge edge = edges[i];
-			//int edgeid = edges[i][0];
-			//int edgeu = edges[i][1];
-			//int edgev = edges[i][2];
+			int edgeid = edges[i][0];
+			int edgeu = edges[i][1];
+			int edgev = edges[i][2];
 
 			//printf("id:%d, nodes:", fblock.id);
 			//printf("id:%d (%d, %d) ", edges[i][0],
@@ -632,7 +650,7 @@ int main(int, char*[]) {
 		// sample a block
 		int blockidx = rand() % blocks.size();
 		Block block = blocks[blockidx];
-		//int blockid = block.id;
+		int blockid = block.id;
 
 		// get its neighbour blocks
 		vector<int> neighsrepeated = get_neighbour_blocks(block,
@@ -668,8 +686,7 @@ int main(int, char*[]) {
 		igraph_vector_view(&ig_edges, edgesigraph, (igraph_real_t)edgesflat.size());
 		igraph_t ig_graph;
 		igraph_integer_t nn = nodesrows*nodescols;
-		//int ret = igraph_create(&ig_graph, &ig_edges, (igraph_integer_t) nn,
-		igraph_create(&ig_graph, &ig_edges, (igraph_integer_t) nn,
+		int ret = igraph_create(&ig_graph, &ig_edges, (igraph_integer_t) nn,
 								IGRAPH_UNDIRECTED);
 		igraph_real_t avg_path;
 		igraph_average_path_length(&ig_graph, &avg_path, IGRAPH_UNDIRECTED, 1);
