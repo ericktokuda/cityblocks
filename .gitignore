@@ -5,6 +5,7 @@ __pycache__/
 xnet.py
 *.swp
 tags
+build/
 
 # C extensions
 *.so

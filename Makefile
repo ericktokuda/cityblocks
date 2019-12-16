@@ -1,19 +1,32 @@
-CXX=clang++
-RM=rm -f
-CPPFLAGS=-g $(shell root-config --cflags)
-LDFLAGS=-g $(shell root-config --ldflags)
-LDLIBS=$(shell root-config --libs)
-INC=-I$${HOME}/.local/igraph-0.7.1/include/igraph/
-LIB=-L$${HOME}/.local/igraph-0.7.1/lib/
+CXX := clang++
+SRCDIR := src
+BUILDDIR := build
+TARGET := bin/run
 
-SRCS=./src/toycities.cpp
-OBJS=./run
+RM := rm -f
 
-all:
-	clang++ src/toycities.cpp $(INC) $(LIB) -ligraph -o run
+SRCEXT := cpp
+SOURCES := $(shell find ${SRCDIR} -type f -name *.${SRCEXT})
+OBJECTS := $(patsubst ${SRCDIR}/%,${BUILDDIR}/%,${SOURCES:.${SRCEXT}=.o})
+CFLAGS := -g # -Wall
 
-run:
-	clang++ src/toycities.cpp $(INC) $(LIB) -ligraph -o run; ./run
+INC := -I$${HOME}/.local/igraph-0.7.1/include/igraph/
+LIB := -L$${HOME}/.local/igraph-0.7.1/lib/ -ligraph
+
+${TARGET}: ${OBJECTS}
+	@echo " Linking..."
+	@echo " ${CXX} $^ -o ${TARGET} ${LIB}"
+	${CXX} $^ -o ${TARGET} ${LIB}
+
+${BUILDDIR}/%.o: ${SRCDIR}/%.${SRCEXT}
+	@mkdir -p ${BUILDDIR}
+	@echo " ${CXX} ${CFLAGS} ${INC} -c -o $@ $<"; ${CXX} ${CFLAGS} ${INC} -c -o $@ $<
 
 clean:
-	$(RM) run
+	@echo " Cleaning...";
+	@echo " ${RM} -r ${BUILDDIR} ${TARGET}"; ${RM} -r ${BUILDDIR} ${TARGET}
+
+test:
+	${CXX} ${CFLAGS} test/tester.cpp ${INC} ${LIB} -o bin/tester
+
+.PHONY: all clean
