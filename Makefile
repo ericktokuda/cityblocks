@@ -30,6 +30,6 @@ clean:
 
 test:
 	$(info Running tests...)
-	${CXX} ${CXXFLAGS} test/tester.cpp ${INC} ${LIB} -o bin/tester
+	${CXX} ${CXXFLAGS} test/tests.cpp ${INC} ${LIB} -o bin/tests
 
 .PHONY: all clean

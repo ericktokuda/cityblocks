@@ -2,12 +2,10 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
-#include <vector>
 #include <map>
 #include <set>
 #include <cstdio>
 
-#include <array>
 #include <stdlib.h>
 #include <igraph.h>
 
