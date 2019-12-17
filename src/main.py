@@ -744,6 +744,70 @@ def plot_distributions(outdir, lonlatranges):
                             auto_open=False)
 
 ##########################################################
+def plot_distributions2(outdir, lonlatranges):
+    """Plot distributions for each array of areas
+
+    Args:
+    allareas(dict): filename as key and areas as values
+    epsilon(float): value to consider as invalid area
+    """
+
+    info('Plotting distributions of data from {} ...'.format(pjoin(outdir, 'results.csv')))
+    figs = {}
+    for k in ['avgpathlengthvsblocksdiventr', 'avgpathlengthvsdegreestd',
+              'avgpathlengthvsdegreesnonnullstd',
+              ]:
+        figs[k] = go.Figure()
+
+    df = pd.read_csv(pjoin(outdir, 'results.csv'))
+
+    ########################################################## Entropy plots
+    for i, row in df.iterrows():
+         figs['avgpathlengthvsblocksdiventr'].add_trace(go.Scatter(
+            x=[row.avgpathlength],
+            y=[row.blocksdiventr],
+            mode='markers', marker_size=10, name=str(i),))
+    # entropylogpearson = pearsonr(df.areadiventropy, np.log(df.wdistmean/df.segmean))
+    figs['avgpathlengthvsblocksdiventr'].update_layout(
+            title="Average path length vs. block areas divisional entropy",
+            yaxis_title="Average path length",
+            xaxis_title="Divisional entropy of block areas",
+            # yaxis_type="log"
+            )
+
+    ########################################################## Entropy plots
+    for i, row in df.iterrows():
+         figs['avgpathlengthvsdegreestd'].add_trace(go.Scatter(
+            x=[row.avgpathlength],
+            y=[row.degreestd],
+            mode='markers', marker_size=10, name=str(i),))
+    # entropylogpearson = pearsonr(df.areadiventropy, np.log(df.wdistmean/df.segmean))
+    figs['avgpathlengthvsdegreestd'].update_layout(
+            title="Average path length vs. degrees standard deviation (all)",
+            yaxis_title="Average path length",
+            xaxis_title="Degrees standard deviation",
+            # yaxis_type="log"
+            )
+
+    ########################################################## Entropy plots
+    for i, row in df.iterrows():
+         figs['avgpathlengthvsdegreesnonnullstd'].add_trace(go.Scatter(
+            x=[row.avgpathlength],
+            y=[row.degreesnonnullstd],
+            mode='markers', marker_size=10, name=str(i),))
+    # entropylogpearson = pearsonr(df.areadiventropy, np.log(df.wdistmean/df.segmean))
+    figs['avgpathlengthvsdegreesnonnullstd'].update_layout(
+            title="Average path length vs. degrees standard deviation (positive degrees)",
+            yaxis_title="Average path length",
+            xaxis_title="Degrees standard deviation",
+            # yaxis_type="log"
+            )
+    ########################################################## Save to file
+    for k in figs.keys():
+        plotly.offline.plot(figs[k],
+                            filename=pjoin(outdir, k + '.html'),
+                            auto_open=False)
+##########################################################
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('graphsdir', help='Graphs directory')
@@ -759,14 +823,16 @@ def main():
 
     # generate_test_graphs(args.graphsdir)
 
+    lonlatranges = None
     # add_weights_to_edges(args.graphsdir, weightdir)
-    lonlatranges = get_maps_ranges(weightdir, args.outdir)
+    # lonlatranges = get_maps_ranges(weightdir, args.outdir)
     # plot_graph_raster(weightdir, skeldir)
     # components = get_components_from_raster(skeldir, args.outdir)
     # generate_components_vis(components, compdir)
     # allareas = calculate_block_areas(components, lonlatranges, args.outdir)
     # compute_statistics(weightdir, allareas, args.outdir)
-    plot_distributions(args.outdir, lonlatranges)
+    # plot_distributions(args.outdir, lonlatranges)
+    plot_distributions2(args.outdir, lonlatranges)
 
     # areasentropy = compute_areas_entropy(args.outdir)
     # print(list(areasentropy))
