@@ -1,26 +1,11 @@
 #include "catch2/catch.hpp"
-
 #include "toycities.hpp"
-#include <iostream>
-//#include <fstream>
-//#include <algorithm>
-//#include <map>
-//#include <set>
-//#include <cstdio>
-
-//#include <stdlib.h>
-#include <igraph.h>
-
-
-//#include "toycities.hpp"
 
 using namespace std;
 
 TEST_CASE( "Factorials are computed", "[factorial]" ) {
     CHECK( 1 == 1 );
     CHECK( 3 == 1 );
-    CHECK( 2 == 2 );
-    CHECK( 2 == 2 );
     CHECK( 2 == 2 );
     CHECK( 2 == 2 );
 }
