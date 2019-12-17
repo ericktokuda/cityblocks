@@ -15,10 +15,34 @@ using namespace std;
 
 #include <limits.h>
 #include <stdio.h>
+#include <math.h>
 
-//########################################################## IGRAPH
-// Number of vertices in the graph
-#define V 9
+float mymean(vector<float> v) // Not checking errors
+
+{      float sum=0;
+       for(int i=0; i < v.size(); i++)
+               sum += v[i];
+       return sum / v.size();
+}
+
+float mystd(vector<float> v, float avg) // Not checking errors
+{
+    float acc = 0;
+    float inverse = 1.0 / v.size();
+    for(unsigned int i=0; i < v.size(); i++)
+        acc += pow(v[i] - avg, 2);
+    return sqrt(inverse * acc);
+}
+
+float mydiventropy(vector<float> v, float sum_)
+{
+    float acc = 0;
+    for(unsigned int i=0; i < v.size(); i++) {
+		float a = v[i] / sum_;
+        acc -= a * log(a);
+	}
+    return acc;
+}
 
 // A utility function to find the vertex with minimum distance value, from
 // the set of vertices not yet included in shortest path tree
@@ -126,25 +150,6 @@ vector<int> get_4connected_neighbours(int i, int nrows, int ncols) {
 	return neighbours;
 }
 
-void test_get_4connected_neighbours() {
-	int testnrows[] = {1, 2, 3};
-	int testncols[] = {0, 2, 4};
-
-	printf("%s...\n", __func__);
-	for (int j = 0; j < 3; j++) {
-		int nrows = testnrows[j];
-		int ncols = testncols[j];
-		printf("For a grid (%d, %d):\n",  nrows, ncols);
-		for (int i = 0; i < nrows*ncols; i++) {
-			cout << "Node " << i << ':';
-			vector<int> x =  get_4connected_neighbours(i, nrows, ncols);
-			for (int k = 0; k < x.size(); k++) {
-				cout << x[k] << ',';
-			}
-			cout << endl;
-		}
-	}
-}
 
 // Get the nodes from a rectangular grid, given @nodesrows and @nodescols
 // Returns a vector of Node structures
@@ -157,22 +162,6 @@ vector<Node> get_grid_nodes(int nodesrows, int nodescols) {
 	return nodes;
 }
 
-void test_get_grid_nodes() {
-	int testnrows[] = {1, 2, 3};
-	int testncols[] = {0, 2, 4};
-
-	printf("%s...\n", __func__);
-	for (int j = 0; j < 3; j++) {
-		int nrows = testnrows[j];
-		int ncols = testncols[j];
-		vector<Node> nodes =  get_grid_nodes(nrows, ncols);
-		printf("For a grid (%d, %d):\n",  nrows, ncols);
-		for (int k = 0; k < nodes.size(); k++) {
-			printf("i:%d id:%d pos:(%d, %d)\n", k, nodes[k][0],
-				   nodes[k][1], nodes[k][2]);
-		}
-	}
-}
 
 // Assuming the order defined in get_fundamental_blocks
 vector<int> get_nodes_from_fblock(int fblockid,
@@ -186,25 +175,6 @@ vector<int> get_nodes_from_fblock(int fblockid,
 		topleft + 2 + fblockcols, topleft + 1 + fblockcols};
 }
 
-void test_get_nodes_from_fblock() {
-	int fblockids[] = {1, 2, 3};
-	int fblockrows[] = {0, 2, 4};
-	int fblockcols[] = {0, 2, 4};
-
-	printf("Started %s...\n", __func__);
-	for (int j = 0; j < 3; j++) {
-		//setbuf(stdout, NULL);
-		printf("For a grid:(%d, %d) and fblockid:%d, nodes:",
-			   fblockrows[j], fblockcols[j], fblockids[j]);
-		vector<int> nodes = get_nodes_from_fblock(fblockids[j],
-												  fblockrows[j],
-												  fblockcols[j]);
-		for (int k = 0; k < nodes.size(); k++) {
-			printf("%d,", nodes[k]);
-		}
-	}
-	printf("\nFinished %s\n", __func__);
-}
 
 // Assuming the order defined in get_fundamental_blocks
 vector<int> get_edges_from_fblock(int fblockid,
@@ -221,26 +191,6 @@ vector<int> get_edges_from_fblock(int fblockid,
 }
 
 
-void test_get_edges_from_fblock() {
-	int fblockids[] = {1, 2, 3};
-	int fblockrows[] = {0, 2, 3};
-	int fblockcols[] = {0, 2, 4};
-
-	printf("Started %s...\n", __func__);
-	for (int j = 0; j < 3; j++) {
-		//setbuf(stdout, NULL);
-		printf("For a grid:(%d, %d) and fblockid:%d, edges:",
-			   fblockrows[j], fblockcols[j], fblockids[j]);
-		vector<int> edges = get_edges_from_fblock(fblockids[j],
-												  fblockrows[j],
-												  fblockcols[j]);
-		for (int k = 0; k < edges.size(); k++) {
-			printf("%d,", edges[k]);
-		}
-		printf("\n");
-	}
-	printf("\nFinished %s\n", __func__);
-}
 
 // Get the blocks defined by the grid
 vector<Fblock> get_fundamental_blocks(int fblocksrows,
@@ -270,31 +220,6 @@ vector<Fblock> get_fundamental_blocks(int fblocksrows,
 }
 
 //
-void test_get_fundamental_blocks() {
-	int testnrows[] = {1, 2, 3};
-	int testncols[] = {0, 2, 4};
-	printf("%s...\n", __func__);
-	for (int k = 0; k < 3; k++) {
-		int nodesrows = testnrows[k];
-		int nodescols = testncols[k];
-		vector<Fblock> fblocks = get_fundamental_blocks(nodesrows,
-														nodescols);
-		printf("For a grid (%d, %d):\n",  nodesrows, nodescols);
-		for (int i = 0; i < fblocks.size(); i++) {
-			printf("%d id:%d nodes:", i, fblocks[i].id);
-			Fblock fblock = fblocks[i];
-			for (int j = 0; j < fblock.nodes.size(); j++)
-				printf("%d,", fblock.nodes[j]);
-			printf(" edges:");
-			for (int j = 0; j < fblock.edges.size(); j++)
-				printf("%d,", fblock.edges[j]);
-			printf(" neigh:");
-			for (int j = 0; j < fblock.neigh.size(); j++)
-				printf("%d,", fblock.neigh[j]);
-			printf("\n");
-		}
-	}
-}
 
 // Assigns each Fblock structure to a single Block (1:1 relationship)
 vector<Block> initialize_blocks(vector<Fblock> fblocks) {
@@ -312,45 +237,6 @@ vector<Block> initialize_blocks(vector<Fblock> fblocks) {
 	return blocks;
 }
 
-void test_initialize_blocks() {
-	int testnrows[] = {1, 2, 3};
-	int testncols[] = {0, 2, 4};
-	printf("%s...\n", __func__);
-	for (int k = 0; k < 3; k++) {
-		int nodesrows = testnrows[k];
-		int nodescols = testncols[k];
-		vector<Fblock> fblocks = get_fundamental_blocks(nodesrows, nodescols);
-		printf("Input (fundamental blocks):\n");
-
-		for (int i = 0; i < fblocks.size(); i++) {
-			Fblock fblock = fblocks[i];
-
-			printf("id:%d, nodes:", fblock.id);
-			for (int j = 0; j < fblock.nodes.size(); j++)
-				printf("%d,", fblock.nodes[j]);
-
-			printf(" Edges:");
-			for (int j = 0; j < fblock.edges.size(); j++)
-				printf("%d,", fblock.edges[j]);
-			printf(" Neigh:");
-			for (int j = 0; j < fblock.neigh.size(); j++)
-				printf("%d,", fblock.neigh[j]);
-			printf("\n");
-		}
-
-		vector<Block> blocks = initialize_blocks(fblocks);
-		printf("Output (initialized blocks):\n");
-		for (int i = 0; i < blocks.size(); i++) {
-			Block block = blocks[i];
-
-			printf("id:%d, fblock:", block.id);
-			for (int j = 0; j < block.fblocks.size(); j++)
-				printf("%d,", block.fblocks[j]);
-
-			printf("\n");
-		}
-	}
-}
 
 // Assigns each Fblock structure to its Block container.
 // Vector indices corresponds to the fblock ids.
@@ -404,38 +290,6 @@ vector<Edge> get_edges_from_regular_grid(int nodesrows, int nodescols) {
 	return edges;
 }
 
-void test_get_edges_from_regular_grid() {
-	int testnrows[] = {1, 2, 3};
-	int testncols[] = {0, 2, 4};
-
-	printf("%s...\n", __func__);
-	for (int k = 0; k < 3; k++) {
-		int nodesrows = testnrows[k];
-		int nodescols = testncols[k];
-		vector<Edge> edges = get_edges_from_regular_grid(nodesrows,
-														 nodescols);
-		printf("For a grid (%d, %d)\n",  nodesrows, nodescols);
-
-		for (int i = 0; i < edges.size(); i++) {
-			//Edge edge = edges[i];
-			//int edgeid = edges[i][0];
-			//int edgeu = edges[i][1];
-			//int edgev = edges[i][2];
-
-			//printf("id:%d, nodes:", fblock.id);
-			//printf("id:%d (%d, %d) ", edges[i][0],
-			//edges[i][1],
-			//edges[i][2]
-			//);
-			printf("id:%d (%d, %d) ", edges[i][0],
-				   edges[i][1],
-				   edges[i][2]
-				  );
-			printf(" ");
-		}
-		printf("\n");
-	}
-}
 
 vector<int> get_neighbour_blocks(Block block, vector<Fblock> fblocks,
 								 vector<int> fblocksownership, int nrows, int ncols) {
@@ -458,9 +312,6 @@ vector<int> get_neighbour_blocks(Block block, vector<Fblock> fblocks,
 	return neighblocks;
 }
 
-void test_get_neighbour_blocks() {
-	// TODO
-}
 
 template <class T>
 int get_idx_from_id(int id, T x) {
@@ -516,35 +367,6 @@ vector<Block> merge_blocks(int blockidx, int neighidx,
 	return blocks;
 }
 
-void test_igraph() {
-	igraph_real_t avg_path;
-	igraph_t graph;
-	igraph_vector_t dimvector;
-	igraph_vector_t edges;
-	int i;
-
-	igraph_vector_init(&dimvector, 2);
-	VECTOR(dimvector)[0]=30;
-	VECTOR(dimvector)[1]=30;
-	igraph_lattice(&graph, &dimvector, 0, IGRAPH_UNDIRECTED, 0, 1);
-
-	igraph_rng_seed(igraph_rng_default(), 42);
-	igraph_vector_init(&edges, 20);
-	for (i=0; i<igraph_vector_size(&edges); i++) {
-		VECTOR(edges)[i] = rand() % (int)igraph_vcount(&graph);
-	}
-
-	igraph_average_path_length(&graph, &avg_path, IGRAPH_UNDIRECTED, 1);
-	printf("Average path length (lattice):            %f\n", (double) avg_path);
-
-	igraph_add_edges(&graph, &edges, 0);
-	igraph_average_path_length(&graph, &avg_path, IGRAPH_UNDIRECTED, 1);
-	printf("Average path length (randomized lattice): %f\n", (double) avg_path);
-
-	igraph_vector_destroy(&dimvector);
-	igraph_vector_destroy(&edges);
-	igraph_destroy(&graph);
-}
 
 vector<vector<int>> get_adjmatrix_from_map(vector<Block> blocks, vector<Fblock> fblocks,
 										   vector<Edge> edges, int fblockrows,
@@ -597,19 +419,238 @@ vector<int> get_all_edges_flattened(vector<Block> blocks, vector<Fblock> fblocks
 	return edgesflat;
 }
 
+//########################################################## TESTS
+void test_get_4connected_neighbours() {
+	int testnrows[] = {1, 2, 3};
+	int testncols[] = {0, 2, 4};
+
+	printf("%s...\n", __func__);
+	for (int j = 0; j < 3; j++) {
+		int nrows = testnrows[j];
+		int ncols = testncols[j];
+		printf("For a grid (%d, %d):\n",  nrows, ncols);
+		for (int i = 0; i < nrows*ncols; i++) {
+			cout << "Node " << i << ':';
+			vector<int> x =  get_4connected_neighbours(i, nrows, ncols);
+			for (int k = 0; k < x.size(); k++) {
+				cout << x[k] << ',';
+			}
+			cout << endl;
+		}
+	}
+}
+
+void test_get_grid_nodes() {
+	int testnrows[] = {1, 2, 3};
+	int testncols[] = {0, 2, 4};
+
+	printf("%s...\n", __func__);
+	for (int j = 0; j < 3; j++) {
+		int nrows = testnrows[j];
+		int ncols = testncols[j];
+		vector<Node> nodes =  get_grid_nodes(nrows, ncols);
+		printf("For a grid (%d, %d):\n",  nrows, ncols);
+		for (int k = 0; k < nodes.size(); k++) {
+			printf("i:%d id:%d pos:(%d, %d)\n", k, nodes[k][0],
+				   nodes[k][1], nodes[k][2]);
+		}
+	}
+}
+
+void test_get_nodes_from_fblock() {
+	int fblockids[] = {1, 2, 3};
+	int fblockrows[] = {0, 2, 4};
+	int fblockcols[] = {0, 2, 4};
+
+	printf("Started %s...\n", __func__);
+	for (int j = 0; j < 3; j++) {
+		//setbuf(stdout, NULL);
+		printf("For a grid:(%d, %d) and fblockid:%d, nodes:",
+			   fblockrows[j], fblockcols[j], fblockids[j]);
+		vector<int> nodes = get_nodes_from_fblock(fblockids[j],
+												  fblockrows[j],
+												  fblockcols[j]);
+		for (int k = 0; k < nodes.size(); k++) {
+			printf("%d,", nodes[k]);
+		}
+	}
+	printf("\nFinished %s\n", __func__);
+}
+
+void test_get_edges_from_fblock() {
+	int fblockids[] = {1, 2, 3};
+	int fblockrows[] = {0, 2, 3};
+	int fblockcols[] = {0, 2, 4};
+
+	printf("Started %s...\n", __func__);
+	for (int j = 0; j < 3; j++) {
+		//setbuf(stdout, NULL);
+		printf("For a grid:(%d, %d) and fblockid:%d, edges:",
+			   fblockrows[j], fblockcols[j], fblockids[j]);
+		vector<int> edges = get_edges_from_fblock(fblockids[j],
+												  fblockrows[j],
+												  fblockcols[j]);
+		for (int k = 0; k < edges.size(); k++) {
+			printf("%d,", edges[k]);
+		}
+		printf("\n");
+	}
+	printf("\nFinished %s\n", __func__);
+}
+
+void test_get_fundamental_blocks() {
+	int testnrows[] = {1, 2, 3};
+	int testncols[] = {0, 2, 4};
+	printf("%s...\n", __func__);
+	for (int k = 0; k < 3; k++) {
+		int nodesrows = testnrows[k];
+		int nodescols = testncols[k];
+		vector<Fblock> fblocks = get_fundamental_blocks(nodesrows,
+														nodescols);
+		printf("For a grid (%d, %d):\n",  nodesrows, nodescols);
+		for (int i = 0; i < fblocks.size(); i++) {
+			printf("%d id:%d nodes:", i, fblocks[i].id);
+			Fblock fblock = fblocks[i];
+			for (int j = 0; j < fblock.nodes.size(); j++)
+				printf("%d,", fblock.nodes[j]);
+			printf(" edges:");
+			for (int j = 0; j < fblock.edges.size(); j++)
+				printf("%d,", fblock.edges[j]);
+			printf(" neigh:");
+			for (int j = 0; j < fblock.neigh.size(); j++)
+				printf("%d,", fblock.neigh[j]);
+			printf("\n");
+		}
+	}
+}
+
+void test_initialize_blocks() {
+	int testnrows[] = {1, 2, 3};
+	int testncols[] = {0, 2, 4};
+	printf("%s...\n", __func__);
+	for (int k = 0; k < 3; k++) {
+		int nodesrows = testnrows[k];
+		int nodescols = testncols[k];
+		vector<Fblock> fblocks = get_fundamental_blocks(nodesrows, nodescols);
+		printf("Input (fundamental blocks):\n");
+
+		for (int i = 0; i < fblocks.size(); i++) {
+			Fblock fblock = fblocks[i];
+
+			printf("id:%d, nodes:", fblock.id);
+			for (int j = 0; j < fblock.nodes.size(); j++)
+				printf("%d,", fblock.nodes[j]);
+
+			printf(" Edges:");
+			for (int j = 0; j < fblock.edges.size(); j++)
+				printf("%d,", fblock.edges[j]);
+			printf(" Neigh:");
+			for (int j = 0; j < fblock.neigh.size(); j++)
+				printf("%d,", fblock.neigh[j]);
+			printf("\n");
+		}
+
+		vector<Block> blocks = initialize_blocks(fblocks);
+		printf("Output (initialized blocks):\n");
+		for (int i = 0; i < blocks.size(); i++) {
+			Block block = blocks[i];
+
+			printf("id:%d, fblock:", block.id);
+			for (int j = 0; j < block.fblocks.size(); j++)
+				printf("%d,", block.fblocks[j]);
+
+			printf("\n");
+		}
+	}
+}
+
+void test_get_edges_from_regular_grid() {
+	int testnrows[] = {1, 2, 3};
+	int testncols[] = {0, 2, 4};
+
+	printf("%s...\n", __func__);
+	for (int k = 0; k < 3; k++) {
+		int nodesrows = testnrows[k];
+		int nodescols = testncols[k];
+		vector<Edge> edges = get_edges_from_regular_grid(nodesrows,
+														 nodescols);
+		printf("For a grid (%d, %d)\n",  nodesrows, nodescols);
+
+		for (int i = 0; i < edges.size(); i++) {
+			//Edge edge = edges[i];
+			//int edgeid = edges[i][0];
+			//int edgeu = edges[i][1];
+			//int edgev = edges[i][2];
+
+			//printf("id:%d, nodes:", fblock.id);
+			//printf("id:%d (%d, %d) ", edges[i][0],
+			//edges[i][1],
+			//edges[i][2]
+			//);
+			printf("id:%d (%d, %d) ", edges[i][0],
+				   edges[i][1],
+				   edges[i][2]
+				  );
+			printf(" ");
+		}
+		printf("\n");
+	}
+}
+
+void test_get_neighbour_blocks() {
+	// TODO
+}
+
+void test_igraph() {
+	igraph_real_t avg_path;
+	igraph_t graph;
+	igraph_vector_t dimvector;
+	igraph_vector_t edges;
+	int i;
+
+	igraph_vector_init(&dimvector, 2);
+	VECTOR(dimvector)[0]=30;
+	VECTOR(dimvector)[1]=30;
+	igraph_lattice(&graph, &dimvector, 0, IGRAPH_UNDIRECTED, 0, 1);
+
+	igraph_rng_seed(igraph_rng_default(), 42);
+	igraph_vector_init(&edges, 20);
+	for (i=0; i<igraph_vector_size(&edges); i++) {
+		VECTOR(edges)[i] = rand() % (int)igraph_vcount(&graph);
+	}
+
+	igraph_average_path_length(&graph, &avg_path, IGRAPH_UNDIRECTED, 1);
+	printf("Average path length (lattice):            %f\n", (double) avg_path);
+
+	igraph_add_edges(&graph, &edges, 0);
+	igraph_average_path_length(&graph, &avg_path, IGRAPH_UNDIRECTED, 1);
+	printf("Average path length (randomized lattice): %f\n", (double) avg_path);
+
+	igraph_vector_destroy(&dimvector);
+	igraph_vector_destroy(&edges);
+	igraph_destroy(&graph);
+}
+
+void test() {
+	//int fblockrows = 50, fblockcols = 50;
+	//int nodesrows = fblockrows + 1, nodescols = fblockcols + 1;
+	test_get_4connected_neighbours();
+	test_get_grid_nodes();
+	test_get_edges_from_fblock();
+	test_get_fundamental_blocks();
+	test_initialize_blocks();
+	test_get_edges_from_regular_grid();
+	printf("END\n");
+}
+//########################################################## TESTS END
+
 //##########################################################
 int main(int, char*[]) {
-	//int fblockrows = 3, fblockcols = 4;
-	int fblockrows = 50, fblockcols = 50;
+	//test(); return 0;
+	
+	int fblockrows = 3, fblockcols = 4;
+	//int fblockrows = 50, fblockcols = 50;
 	int nodesrows = fblockrows + 1, nodescols = fblockcols + 1;
-	//test_get_4connected_neighbours();
-	//test_get_grid_nodes();
-	//test_get_edges_from_fblock();
-	//test_get_fundamental_blocks();
-	//test_initialize_blocks();
-	//test_get_edges_from_regular_grid();
-	//printf("END\n");
-	//return 0;
 
 	//srand(0);
 	srand(time(0));
@@ -674,7 +715,28 @@ int main(int, char*[]) {
 		igraph_destroy(&ig_graph);
 		
 		//_stream << << avg_path << endl;
-		fprintf(fh, "%ld,%g\n", blocks.size(), avg_path);
+		//printf("%f\n", mymean(blocks));
+		vector<float> blockareas;
+		float areassum = 0;
+		blockareas.reserve(blocks.size());
+		for (int k = 0; k < blocks.size(); k++) {
+			blockareas.push_back(blocks[k].fblocks.size());
+			areassum += blocks[k].fblocks.size();
+		}
+
+		//for (int k = 0; k < blockareas.size(); k++)
+			//printf("%f ", blockareas[k]);
+		//printf("\n");
+		
+		float mean_ = mymean(blockareas);
+		float std_ = mystd(blockareas, mean_);
+		float cv_ = std_ / mean_;
+		float diventr =  mydiventropy(blockareas, areassum);
+		//float evenness =  myevenness(blockareas, areassum);
+
+		printf("%f %f %f %f\n", mean_, std_, cv_, diventr);
+
+		//fprintf(fh, "%ld,%g\n", blocks.size(), avg_path);
 		//igraph_delete_edges(igraph_t *graph, igraph_es_t edges);
 		//printf("nblocks:%ld, avgpathlength:%f\n", blocks.size(), l);
 		//print_adj_matrix(adj);

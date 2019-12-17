@@ -2,6 +2,7 @@
 
 #include <vector>
 //#include "catch2/catch.hpp"
+#include <igraph.h>
 
 #include <array>
 //#include <stdlib.h>
