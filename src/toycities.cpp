@@ -16,37 +16,40 @@
 //clang++ src/toycities.cpp -I${HOME}/.local/igraph-0.7.1/include/igraph/ -L${HOME}/.local/igraph-0.7.1/lib/ -ligraph -o run
 
 
-float mymean(vector<float> v) // Not checking errors
-
-{      float sum=0;
-       for(int i=0; i < v.size(); i++)
-               sum += v[i];
-       return sum / v.size();
+float mymean(vector<float> v) {// Not checking errors
+	if (v.size() == 0)
+	  throw "Mean of empty vector";
+	float sum = 0;
+	for(int i = 0; i < v.size(); i++)
+		sum += v[i];
+	return sum / v.size();
 }
 
-float mystd(vector<float> v, float avg) // Not checking errors
-{
-    float acc = 0;
-    float inverse = 1.0 / v.size();
-    for(unsigned int i=0; i < v.size(); i++)
-        acc += pow(v[i] - avg, 2);
-    return sqrt(inverse * acc);
+float mystd(vector<float> v, float avg) {// Not checking errors
+	if (v.size() == 0)
+	  throw "Std of empty vector";
+	else if (v.size() == 1)
+		return 0.0;
+
+	float acc = 0;
+
+	for(unsigned int i = 0; i < v.size(); i++)
+		acc += pow(v[i] - avg, 2);
+	return sqrt(acc / (v.size() - 1));
 }
 
-float mydiventropy(vector<float> v, float sum_)
-{
-    float acc = 0;
-    for(unsigned int i=0; i < v.size(); i++) {
+float mydiventropy(vector<float> v, float sum_) {
+	float acc = 0;
+	for(unsigned int i=0; i < v.size(); i++) {
 		float a = v[i] / sum_;
-        acc -= a * log(a);
+		acc -= a * log(a);
 	}
-    return acc;
+	return acc;
 }
 
 // A utility function to find the vertex with minimum distance value, from
 // the set of vertices not yet included in shortest path tree
-int compute_min_distance(vector<int> dist, vector<bool> sptSet)
-{
+int compute_min_distance(vector<int> dist, vector<bool> sptSet) {
 	// Initialize min value
 	int min = INT_MAX, min_index;
 
@@ -58,8 +61,7 @@ int compute_min_distance(vector<int> dist, vector<bool> sptSet)
 }
 
 // A utility function to print the constructed distance array
-void printSolution(vector<int> dist)
-{
+void printSolution(vector<int> dist) {
 	printf("Vertex \t\t Distance from Source\n");
 	for (int i = 0; i < dist.size(); i++)
 		printf("%d \t\t %d\n", i, dist[i]);
@@ -67,8 +69,7 @@ void printSolution(vector<int> dist)
 
 // Function that implements Dijkstra's single source shortest path algorithm
 // for a graph represented using adjacency matrix representation
-float dijkstra(vector<vector<int>> graph, int src)
-{
+float dijkstra(vector<vector<int>> graph, int src) {
 	int n = graph.size();
 	vector<int> dist(n, INT_MAX);
 	vector<bool> sptSet(n, false);
@@ -645,136 +646,136 @@ void test() {
 
 //##########################################################
 //int main(int, char*[]) {
-	////test(); return 0;
-	
-	////int fblockrows = 3, fblockcols = 4;
-	//int fblockrows = 20, fblockcols = 30;
-	//int nodesrows = fblockrows + 1, nodescols = fblockcols + 1;
+////test(); return 0;
 
-	////srand(0);
-	//srand(time(0));
+////int fblockrows = 3, fblockcols = 4;
+//int fblockrows = 20, fblockcols = 30;
+//int nodesrows = fblockrows + 1, nodescols = fblockcols + 1;
 
-	//vector<Edge> edges = get_edges_from_regular_grid(nodesrows, nodescols);
-	//vector<Fblock> fblocks = get_fundamental_blocks(fblockrows, fblockcols);
-	//vector<Block> blocks = initialize_blocks(fblocks);
-	//vector<int> fblockownership = initialize_fblocks_ownership(blocks);
-	//vector<vector<int>> adj = get_adjmatrix_from_map(blocks, fblocks, edges,
-													 //fblockrows, fblockcols);
-	////ofstream _stream;
-	//FILE *fh = fopen("/tmp/results.csv", "w");
-	//fprintf(fh, "nblocks,avgpathlength,blocksmean,blocksstd,blockscv,blocksdiventr,degreestd,degreesnonnullstd\n");
+////srand(0);
+//srand(time(0));
 
-		////fprintf(fh, "%ld,%g,%f,%f,%f,%f\n", blocks.size(), avg_path, blocksmean,
-				////blocksstd, blockscv, blocksdiventr, degreestd);
-	//setbuf(fh, NULL);
-	////_stream.open ("/tmp/result.txt");
-	//for (int i = 0; i < 5000; i++) {
-		//if (blocks.size() == 1) break;
-		//// sample a block
-		//int blockidx = rand() % blocks.size();
-		//Block block = blocks[blockidx];
-		////int blockid = block.id;
+//vector<Edge> edges = get_edges_from_regular_grid(nodesrows, nodescols);
+//vector<Fblock> fblocks = get_fundamental_blocks(fblockrows, fblockcols);
+//vector<Block> blocks = initialize_blocks(fblocks);
+//vector<int> fblockownership = initialize_fblocks_ownership(blocks);
+//vector<vector<int>> adj = get_adjmatrix_from_map(blocks, fblocks, edges,
+//fblockrows, fblockcols);
+////ofstream _stream;
+//FILE *fh = fopen("/tmp/results.csv", "w");
+//fprintf(fh, "nblocks,avgpathlength,blocksmean,blocksstd,blockscv,blocksdiventr,degreestd,degreesnonnullstd\n");
 
-		//// get its neighbour blocks
-		//vector<int> neighsrepeated = get_neighbour_blocks(block,
-														  //fblocks,
-														  //fblockownership,
-														  //fblockrows,
-														  //fblockcols);
+////fprintf(fh, "%ld,%g,%f,%f,%f,%f\n", blocks.size(), avg_path, blocksmean,
+////blocksstd, blockscv, blocksdiventr, degreestd);
+//setbuf(fh, NULL);
+////_stream.open ("/tmp/result.txt");
+//for (int i = 0; i < 5000; i++) {
+//if (blocks.size() == 1) break;
+//// sample a block
+//int blockidx = rand() % blocks.size();
+//Block block = blocks[blockidx];
+////int blockid = block.id;
 
-		//// sample a neighbour block, weighted by the num of neighbour fblocks
-		//int neighid = neighsrepeated[rand() % neighsrepeated.size()];
-		//int neighidx = get_idx_from_id<vector<Block>>(neighid, blocks);
+//// get its neighbour blocks
+//vector<int> neighsrepeated = get_neighbour_blocks(block,
+//fblocks,
+//fblockownership,
+//fblockrows,
+//fblockcols);
 
-		//// Merge two blocks (update variables)
-		//blocks = merge_blocks(blockidx, neighidx, blocks, fblocks);
+//// sample a neighbour block, weighted by the num of neighbour fblocks
+//int neighid = neighsrepeated[rand() % neighsrepeated.size()];
+//int neighidx = get_idx_from_id<vector<Block>>(neighid, blocks);
 
-		//// Update fblockownership
-		//for (int j = 0; j < blocks.size(); j++) {
-			//Block bl = blocks[j];
-			//for (int jj = 0; jj < bl.fblocks.size(); jj++) {
-				//fblockownership[bl.fblocks[jj]] = bl.id;
-			//}
-		//}
+//// Merge two blocks (update variables)
+//blocks = merge_blocks(blockidx, neighidx, blocks, fblocks);
 
-		////vector<vector<int>> adj = get_adjmatrix_from_map(blocks, fblocks, edges,
-		////fblockrows, fblockcols);
-		////float l = compute_average_path_length(adj);
-		
-		//igraph_vector_t ig_edges;
-		//vector<int> edgesflat = get_all_edges_flattened(blocks, fblocks, edges,
-														//fblockrows, fblockcols);
-		//igraph_real_t edgesigraph[edgesflat.size()];
-		//copy(edgesflat.begin(), edgesflat.end(), edgesigraph);
-		//igraph_vector_view(&ig_edges, edgesigraph, (igraph_real_t)edgesflat.size());
-		//igraph_t ig_graph;
-		//igraph_integer_t nn = nodesrows*nodescols;
-		////int ret = igraph_create(&ig_graph, &ig_edges, (igraph_integer_t) nn,
-		//igraph_create(&ig_graph, &ig_edges, (igraph_integer_t) nn,
-								//IGRAPH_UNDIRECTED);
-		//igraph_real_t avg_path;
-		//igraph_average_path_length(&ig_graph, &avg_path, IGRAPH_UNDIRECTED, 1);
-		
-		////_stream << << avg_path << endl;
-		////printf("%f\n", mymean(blocks));
-		//vector<float> blockareas;
-		//float areassum = 0;
-		//blockareas.reserve(blocks.size());
-		//for (int k = 0; k < blocks.size(); k++) {
-			//blockareas.push_back(blocks[k].fblocks.size());
-			//areassum += blocks[k].fblocks.size();
-		//}
+//// Update fblockownership
+//for (int j = 0; j < blocks.size(); j++) {
+//Block bl = blocks[j];
+//for (int jj = 0; jj < bl.fblocks.size(); jj++) {
+//fblockownership[bl.fblocks[jj]] = bl.id;
+//}
+//}
 
-		////for (int k = 0; k < blockareas.size(); k++)
-			////printf("%f ", blockareas[k]);
-		////printf("\n");
-		
-		//float blocksmean = mymean(blockareas);
-		//float blocksstd = mystd(blockareas, blocksmean);
-		//float blockscv = blocksstd / blocksmean;
-		//float blocksdiventr =  mydiventropy(blockareas, areassum);
-		////float evenness =  myevenness(blockareas, areassum);
-		//igraph_vector_t ig_degrees;
-		//igraph_vector_init(&ig_degrees, 0);
-		//int ret = igraph_degree(&ig_graph, &ig_degrees, igraph_vss_all(), IGRAPH_ALL,
-				   //false);
+////vector<vector<int>> adj = get_adjmatrix_from_map(blocks, fblocks, edges,
+////fblockrows, fblockcols);
+////float l = compute_average_path_length(adj);
 
-		
-		////vector<int> degrees(igraph_vector_size(&ig_degrees), 0);
-		//vector<float> degrees, degreesnonnull;
-		//degrees.reserve(igraph_vector_size(&ig_degrees));
-		//for (int k = 0; k < igraph_vector_size(&ig_degrees); k++) {
-			//degrees.push_back(static_cast<float>(VECTOR(ig_degrees)[k]));
-			//if (VECTOR(ig_degrees)[k] > 0)
-				//degreesnonnull.push_back(static_cast<float>(VECTOR(ig_degrees)[k]));
-		//}
+//igraph_vector_t ig_edges;
+//vector<int> edgesflat = get_all_edges_flattened(blocks, fblocks, edges,
+//fblockrows, fblockcols);
+//igraph_real_t edgesigraph[edgesflat.size()];
+//copy(edgesflat.begin(), edgesflat.end(), edgesigraph);
+//igraph_vector_view(&ig_edges, edgesigraph, (igraph_real_t)edgesflat.size());
+//igraph_t ig_graph;
+//igraph_integer_t nn = nodesrows*nodescols;
+////int ret = igraph_create(&ig_graph, &ig_edges, (igraph_integer_t) nn,
+//igraph_create(&ig_graph, &ig_edges, (igraph_integer_t) nn,
+//IGRAPH_UNDIRECTED);
+//igraph_real_t avg_path;
+//igraph_average_path_length(&ig_graph, &avg_path, IGRAPH_UNDIRECTED, 1);
 
-		//float degreestd = mystd(degrees, mymean(degrees));
-		//float degreesnonnullstd = mystd(degreesnonnull, mymean(degreesnonnull));
-			////printf("%f ", blockareas[k]);
-		////printf("\n");
-		////
-		////for (int k = 0; k < degrees.size(); k++)
-			////printf("%d ", degrees[k]);
-		////printf("\n");
-		////printf("\n");
-		////printf("\n");
+////_stream << << avg_path << endl;
+////printf("%f\n", mymean(blocks));
+//vector<float> blockareas;
+//float areassum = 0;
+//blockareas.reserve(blocks.size());
+//for (int k = 0; k < blocks.size(); k++) {
+//blockareas.push_back(blocks[k].fblocks.size());
+//areassum += blocks[k].fblocks.size();
+//}
+
+////for (int k = 0; k < blockareas.size(); k++)
+////printf("%f ", blockareas[k]);
+////printf("\n");
+
+//float blocksmean = mymean(blockareas);
+//float blocksstd = mystd(blockareas, blocksmean);
+//float blockscv = blocksstd / blocksmean;
+//float blocksdiventr =  mydiventropy(blockareas, areassum);
+////float evenness =  myevenness(blockareas, areassum);
+//igraph_vector_t ig_degrees;
+//igraph_vector_init(&ig_degrees, 0);
+//int ret = igraph_degree(&ig_graph, &ig_degrees, igraph_vss_all(), IGRAPH_ALL,
+//false);
+
+
+////vector<int> degrees(igraph_vector_size(&ig_degrees), 0);
+//vector<float> degrees, degreesnonnull;
+//degrees.reserve(igraph_vector_size(&ig_degrees));
+//for (int k = 0; k < igraph_vector_size(&ig_degrees); k++) {
+//degrees.push_back(static_cast<float>(VECTOR(ig_degrees)[k]));
+//if (VECTOR(ig_degrees)[k] > 0)
+//degreesnonnull.push_back(static_cast<float>(VECTOR(ig_degrees)[k]));
+//}
+
+//float degreestd = mystd(degrees, mymean(degrees));
+//float degreesnonnullstd = mystd(degreesnonnull, mymean(degreesnonnull));
+////printf("%f ", blockareas[k]);
+////printf("\n");
+////
+////for (int k = 0; k < degrees.size(); k++)
+////printf("%d ", degrees[k]);
+////printf("\n");
+////printf("\n");
+////printf("\n");
 
 
 ////int igraph_degree(const igraph_t *graph, igraph_vector_t *res,
-		  ////const igraph_vs_t vids,
-		  ////igraph_neimode_t mode, igraph_bool_t loops);
+////const igraph_vs_t vids,
+////igraph_neimode_t mode, igraph_bool_t loops);
 
-		////printf("%f %f %f %f %f\n", mean_, std_, cv_, diventr, degreestd);
+////printf("%f %f %f %f %f\n", mean_, std_, cv_, diventr, degreestd);
 
-		//fprintf(fh, "%ld,%g,%f,%f,%f,%f,%f,%f\n", blocks.size(), avg_path, blocksmean,
-				//blocksstd, blockscv, blocksdiventr, degreestd, degreesnonnullstd);
-		////igraph_delete_edges(igraph_t *graph, igraph_es_t edges);
-		////printf("nblocks:%ld, avgpathlength:%f\n", blocks.size(), l);
-		////print_adj_matrix(adj);
-		//igraph_destroy(&ig_graph);
-	//}
-	//return 0;
+//fprintf(fh, "%ld,%g,%f,%f,%f,%f,%f,%f\n", blocks.size(), avg_path, blocksmean,
+//blocksstd, blockscv, blocksdiventr, degreestd, degreesnonnullstd);
+////igraph_delete_edges(igraph_t *graph, igraph_es_t edges);
+////printf("nblocks:%ld, avgpathlength:%f\n", blocks.size(), l);
+////print_adj_matrix(adj);
+//igraph_destroy(&ig_graph);
+//}
+//return 0;
 //}
 
 //template int get_idx_from_id<int>(int id, int x);

@@ -3,17 +3,22 @@
 
 using namespace std;
 
-TEST_CASE( "Factorials are computed", "[factorial]" ) {
-    CHECK( 1 == 1 );
-    CHECK( 3 == 1 );
-    CHECK( 2 == 2 );
-    CHECK( 2 == 2 );
+TEST_CASE("mymean", "[mymean]") {
+	vector<float> v(1, 10);
+	CHECK( mymean(v) == 10 );	//[10]
+	v.push_back(0.0);
+	CHECK( mymean(v) == 5 );	//[10, 0]
+	v.push_back(-10.0);
+	CHECK( mymean(v) == 0 );	//[10, 0, -10]
+	vector<float> v2(1, 0.000000000001);
+	CHECK( mymean(v2) == Approx(0.000000000001 ));	//[0.00000001]
 }
 
-TEST_CASE( "Bla", "[foo]" ) {
-    CHECK( 1 == 1 );
-    CHECK( 3 == 1 );
-    CHECK( 2 == 2 );
+TEST_CASE("mystd", "[mystd]") {
+	vector<float> v(1, 10);
+	CHECK( mystd(v, 10) == 0 );	//[10]
+	v.push_back(0.0);
+	CHECK( Approx(mystd(v, 5)) == 7.071 );	//[10, 0]
 }
 
 void print_hello(const char* mystr) {

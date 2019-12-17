@@ -17,7 +17,7 @@ OBJ := $(patsubst ${SRCDIR}/%,${BUILDDIR}/%,${SRC:.${SRCEXT}=.o})
 TESTSRC := $(shell find ${TESTDIR} -type f -name *.${SRCEXT})
 TESTOBJ := $(patsubst ${TESTDIR}/%,${BUILDDIR}/%,${TESTSRC:.${SRCEXT}=.o})
 
-CXXFLAGS := -g -Wall -O3 -std=c++11
+CXXFLAGS := -g -Wall -O3 -std=c++14
 
 INC := -I$${HOME}/.local/igraph-0.7.1/include/igraph/ -I./include/
 INCTEST := -I$${HOME}/projects/Catch2/single_include/
