@@ -14,7 +14,7 @@ int main(int, char*[]) {
 	vector<Edge> edges = get_edges_from_regular_grid(nodesrows, nodescols);
 	vector<Fblock> fblocks = get_fundamental_blocks(fblockrows, fblockcols);
 	vector<Block> blocks = initialize_blocks(fblocks);
-	vector<int> fblockownership = initialize_fblocks_ownership(blocks);
+	vector<int> fblockownership = get_initial_fblocks_ownership(blocks);
 	vector<vector<int>> adj = get_adjmatrix_from_map(blocks, fblocks, edges,
 													 fblockrows, fblockcols);
 	//ofstream _stream;

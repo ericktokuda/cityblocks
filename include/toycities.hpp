@@ -47,7 +47,7 @@ vector<int> get_edges_from_fblock(int fblockid,
 vector<Fblock> get_fundamental_blocks(int fblocksrows,
 									  int fblockscols);
 vector<Block> initialize_blocks(vector<Fblock> fblocks);
-vector<int> initialize_fblocks_ownership(vector<Block> blocks);
+vector<int> get_initial_fblocks_ownership(vector<Block> blocks);
 vector<Edge> get_edges_from_regular_grid(int nodesrows, int nodescols);
 vector<int> get_neighbour_blocks(Block block, vector<Fblock> fblocks,
 								 vector<int> fblocksownership,

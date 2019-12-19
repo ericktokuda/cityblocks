@@ -61,115 +61,20 @@ TEST_CASE("get_grid_nodes", "[get_grid_nodes]") {
 								  //int fblockcols) {
 								  
 TEST_CASE("get_nodes_from_fblock", "[get_nodes_from_block]") {
-	vector<int> v1{};
+	vector<int> v1{}, v2{1,2,5,4}, v3{3,4,7,6};
 	CHECK_THAT( get_nodes_from_fblock(8, 0, 0), Catch::Equals(v1) );
-	//CHECK_THAT( get_nodes_from_fblock(0, 0, 0), Catch::Equals(v1) );
-	//CHECK_THAT( get_grid_nodes(1, 1), Catch::Equals(v2) );
-	//CHECK_THAT( get_grid_nodes(2, 3), Catch::Equals(v3) );
+	CHECK_THAT( get_nodes_from_fblock(1, 1, 2), Catch::Equals(v2) );
+	CHECK_THAT( get_nodes_from_fblock(2, 2, 2), Catch::Equals(v3) );
 }
-//void test_get_4connected_neighbours() {
-	//int testnrows[] = {1, 2, 3};
-	//int testncols[] = {0, 2, 4};
 
-	//printf("%s...\n", __func__);
-	//for (int j = 0; j < 3; j++) {
-		//int nrows = testnrows[j];
-		//int ncols = testncols[j];
-		//printf("For a grid (%d, %d):\n",  nrows, ncols);
-		//for (int i = 0; i < nrows*ncols; i++) {
-			//cout << "Node " << i << ':';
-			//vector<int> x =  get_4connected_neighbours(i, nrows, ncols);
-			//for (int k = 0; k < x.size(); k++) {
-				//cout << x[k] << ',';
-			//}
-			//cout << endl;
-		//}
-	//}
-//}
+TEST_CASE("get_edges_from_fblock", "[get_edges_from_fblock]") {
+	vector<int> v1{}, v2{1,6,3,5}, v3{2,10,4,9};
+	CHECK_THAT( get_edges_from_fblock(8, 0, 0), Catch::Equals(v1) );
+	CHECK_THAT( get_edges_from_fblock(1, 1, 2), Catch::Equals(v2) );
+	CHECK_THAT( get_edges_from_fblock(2, 2, 2), Catch::Equals(v3) );
+}
 
-//void test_get_grid_nodes() {
-	//int testnrows[] = {1, 2, 3};
-	//int testncols[] = {0, 2, 4};
-
-	//printf("%s...\n", __func__);
-	//for (int j = 0; j < 3; j++) {
-		//int nrows = testnrows[j];
-		//int ncols = testncols[j];
-		//vector<Node> nodes =  get_grid_nodes(nrows, ncols);
-		//printf("For a grid (%d, %d):\n",  nrows, ncols);
-		//for (int k = 0; k < nodes.size(); k++) {
-			//printf("i:%d id:%d pos:(%d, %d)\n", k, nodes[k][0],
-				   //nodes[k][1], nodes[k][2]);
-		//}
-	//}
-//}
-
-//void test_get_nodes_from_fblock() {
-	//int fblockids[] = {1, 2, 3};
-	//int fblockrows[] = {0, 2, 4};
-	//int fblockcols[] = {0, 2, 4};
-
-	//printf("Started %s...\n", __func__);
-	//for (int j = 0; j < 3; j++) {
-		////setbuf(stdout, NULL);
-		//printf("For a grid:(%d, %d) and fblockid:%d, nodes:",
-			   //fblockrows[j], fblockcols[j], fblockids[j]);
-		//vector<int> nodes = get_nodes_from_fblock(fblockids[j],
-												  //fblockrows[j],
-												  //fblockcols[j]);
-		//for (int k = 0; k < nodes.size(); k++) {
-			//printf("%d,", nodes[k]);
-		//}
-	//}
-	//printf("\nFinished %s\n", __func__);
-//}
-
-//void test_get_edges_from_fblock() {
-	//int fblockids[] = {1, 2, 3};
-	//int fblockrows[] = {0, 2, 3};
-	//int fblockcols[] = {0, 2, 4};
-
-	//printf("Started %s...\n", __func__);
-	//for (int j = 0; j < 3; j++) {
-		////setbuf(stdout, NULL);
-		//printf("For a grid:(%d, %d) and fblockid:%d, edges:",
-			   //fblockrows[j], fblockcols[j], fblockids[j]);
-		//vector<int> edges = get_edges_from_fblock(fblockids[j],
-												  //fblockrows[j],
-												  //fblockcols[j]);
-		//for (int k = 0; k < edges.size(); k++) {
-			//printf("%d,", edges[k]);
-		//}
-		//printf("\n");
-	//}
-	//printf("\nFinished %s\n", __func__);
-//}
-
-//void test_get_fundamental_blocks() {
-	//int testnrows[] = {1, 2, 3};
-	//int testncols[] = {0, 2, 4};
-	//printf("%s...\n", __func__);
-	//for (int k = 0; k < 3; k++) {
-		//int nodesrows = testnrows[k];
-		//int nodescols = testncols[k];
-		//vector<Fblock> fblocks = get_fundamental_blocks(nodesrows,
-														//nodescols);
-		//printf("For a grid (%d, %d):\n",  nodesrows, nodescols);
-		//for (int i = 0; i < fblocks.size(); i++) {
-			//printf("%d id:%d nodes:", i, fblocks[i].id);
-			//Fblock fblock = fblocks[i];
-			//for (int j = 0; j < fblock.nodes.size(); j++)
-				//printf("%d,", fblock.nodes[j]);
-			//printf(" edges:");
-			//for (int j = 0; j < fblock.edges.size(); j++)
-				//printf("%d,", fblock.edges[j]);
-			//printf(" neigh:");
-			//for (int j = 0; j < fblock.neigh.size(); j++)
-				//printf("%d,", fblock.neigh[j]);
-			//printf("\n");
-		//}
-	//}
-//}
+//Not testing get_fundamental_block; simple function and very hard to test
 
 //void test_initialize_blocks() {
 	//int testnrows[] = {1, 2, 3};
