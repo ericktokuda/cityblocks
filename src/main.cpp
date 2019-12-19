@@ -1,10 +1,11 @@
 #include "toycities.hpp"
+#include <igraph.h>
 
 int main(int, char*[]) {
 	//test(); return 0;
 	
-	int fblockrows = 3, fblockcols = 4;
-	//int fblockrows = 20, fblockcols = 30;
+	//int fblockrows = 3, fblockcols = 4;
+	int fblockrows = 20, fblockcols = 30;
 	int nodesrows = fblockrows + 1, nodescols = fblockcols + 1;
 
 	//srand(0);
@@ -18,10 +19,8 @@ int main(int, char*[]) {
 													 fblockrows, fblockcols);
 	//ofstream _stream;
 	FILE *fh = fopen("/tmp/results.csv", "w");
-	fprintf(fh, "nblocks,avgpathlength,blocksmean,blocksstd,blockscv,blocksdiventr,degreestd,degreesnonnullstd\n");
+	fprintf(fh, "nblocks,avgpathlength,blocksmean,blocksstd,blockscv,blocksdiventr,blocksevenness,degreestd,degreesnonnullstd\n");
 
-		//fprintf(fh, "%ld,%g,%f,%f,%f,%f\n", blocks.size(), avg_path, blocksmean,
-				//blocksstd, blockscv, blocksdiventr, degreestd);
 	setbuf(fh, NULL);
 	//_stream.open ("/tmp/result.txt");
 	for (int i = 0; i < 5000; i++) {
@@ -53,10 +52,6 @@ int main(int, char*[]) {
 			}
 		}
 
-		//vector<vector<int>> adj = get_adjmatrix_from_map(blocks, fblocks, edges,
-		//fblockrows, fblockcols);
-		//float l = compute_average_path_length(adj);
-		
 		igraph_vector_t ig_edges;
 		vector<int> edgesflat = get_all_edges_flattened(blocks, fblocks, edges,
 														fblockrows, fblockcols);
@@ -71,8 +66,6 @@ int main(int, char*[]) {
 		igraph_real_t avg_path;
 		igraph_average_path_length(&ig_graph, &avg_path, IGRAPH_UNDIRECTED, 1);
 		
-		//_stream << << avg_path << endl;
-		//printf("%f\n", mymean(blocks));
 		vector<float> blockareas;
 		float areassum = 0;
 		blockareas.reserve(blocks.size());
@@ -81,25 +74,16 @@ int main(int, char*[]) {
 			areassum += blocks[k].fblocks.size();
 		}
 
-		//for (int k = 0; k < blockareas.size(); k++)
-			//printf("%f ", blockareas[k]);
-		//printf("\n");
-		
 		float blocksmean = mymean(blockareas);
 		float blocksstd = mystd(blockareas, blocksmean);
 		float blockscv = blocksstd / blocksmean;
-		float blocksdiventr =  mydiventropy(blockareas, areassum);
-		//float evenness =  myevenness(blockareas, areassum);
+		float blocksdiventr =  mydiventropy(blockareas);
+		float blocksevenness =  myevenness(blockareas);
 		igraph_vector_t ig_degrees;
 		igraph_vector_init(&ig_degrees, 0);
-		//int ret = igraph_degree(&ig_graph, &ig_degrees, igraph_vss_all(), IGRAPH_ALL,
-				   //false);
-		igraph_degree(&ig_graph, &ig_degrees, igraph_vss_all(), IGRAPH_ALL,
-				   false);
-
+		igraph_degree(&ig_graph, &ig_degrees, igraph_vss_all(), IGRAPH_ALL, false);
 		
-		//vector<int> degrees(igraph_vector_size(&ig_degrees), 0);
-		vector<float> degrees, degreesnonnull;
+		vector<float> degrees, degreesnonnull; // Convert ig_degrees to vector
 		degrees.reserve(igraph_vector_size(&ig_degrees));
 		for (int k = 0; k < igraph_vector_size(&ig_degrees); k++) {
 			degrees.push_back(static_cast<float>(VECTOR(ig_degrees)[k]));
@@ -109,27 +93,11 @@ int main(int, char*[]) {
 
 		float degreestd = mystd(degrees, mymean(degrees));
 		float degreesnonnullstd = mystd(degreesnonnull, mymean(degreesnonnull));
-			//printf("%f ", blockareas[k]);
-		//printf("\n");
-		//
-		//for (int k = 0; k < degrees.size(); k++)
-			//printf("%d ", degrees[k]);
-		//printf("\n");
-		//printf("\n");
-		//printf("\n");
 
+		fprintf(fh, "%ld,%g,%f,%f,%f,%f,%f,%f,%f\n", blocks.size(), avg_path,
+				blocksmean, blocksstd, blockscv, blocksdiventr, blocksevenness,
+				degreestd, degreesnonnullstd);
 
-//int igraph_degree(const igraph_t *graph, igraph_vector_t *res,
-		  //const igraph_vs_t vids,
-		  //igraph_neimode_t mode, igraph_bool_t loops);
-
-		//printf("%f %f %f %f %f\n", mean_, std_, cv_, diventr, degreestd);
-
-		fprintf(fh, "%ld,%g,%f,%f,%f,%f,%f,%f\n", blocks.size(), avg_path, blocksmean,
-				blocksstd, blockscv, blocksdiventr, degreestd, degreesnonnullstd);
-		//igraph_delete_edges(igraph_t *graph, igraph_es_t edges);
-		//printf("nblocks:%ld, avgpathlength:%f\n", blocks.size(), l);
-		//print_adj_matrix(adj);
 		igraph_destroy(&ig_graph);
 	}
 	return 0;
