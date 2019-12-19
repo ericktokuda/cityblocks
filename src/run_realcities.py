@@ -744,7 +744,7 @@ def plot_distributions(outdir, lonlatranges):
                             auto_open=False)
 
 ##########################################################
-def plot_distributions2(outdir, lonlatranges):
+def plot_distributions2(outdir):
     """Plot distributions for each array of areas
 
     Args:
@@ -754,8 +754,8 @@ def plot_distributions2(outdir, lonlatranges):
 
     info('Plotting distributions of data from {} ...'.format(pjoin(outdir, 'results.csv')))
     figs = {}
-    for k in ['avgpathlengthvsblocksdiventr', 'avgpathlengthvsdegreestd',
-              'avgpathlengthvsdegreesnonnullstd',
+    for k in ['avgpathlengthvsblocksdiventr', 'avgpathlengthvsblocksevenness',
+              'avgpathlengthvsdegreestd', 'avgpathlengthvsdegreesnonnullstd',
               ]:
         figs[k] = go.Figure()
 
@@ -775,6 +775,19 @@ def plot_distributions2(outdir, lonlatranges):
             # yaxis_type="log"
             )
 
+    ########################################################## Entropy plots
+    for i, row in df.iterrows():
+         figs['avgpathlengthvsblocksevenness'].add_trace(go.Scatter(
+            x=[row.avgpathlength],
+            y=[row.blocksevenness],
+            mode='markers', marker_size=10, name=str(i),))
+    # entropylogpearson = pearsonr(df.areadiventropy, np.log(df.wdistmean/df.segmean))
+    figs['avgpathlengthvsblocksevenness'].update_layout(
+            title="Average path length vs. block areas evenness",
+            yaxis_title="Average path length",
+            xaxis_title="Evenness of block areas",
+            # yaxis_type="log"
+            )
     ########################################################## Entropy plots
     for i, row in df.iterrows():
          figs['avgpathlengthvsdegreestd'].add_trace(go.Scatter(
@@ -823,7 +836,6 @@ def main():
 
     # generate_test_graphs(args.graphsdir)
 
-    lonlatranges = None
     # add_weights_to_edges(args.graphsdir, weightdir)
     # lonlatranges = get_maps_ranges(weightdir, args.outdir)
     # plot_graph_raster(weightdir, skeldir)
@@ -832,7 +844,7 @@ def main():
     # allareas = calculate_block_areas(components, lonlatranges, args.outdir)
     # compute_statistics(weightdir, allareas, args.outdir)
     # plot_distributions(args.outdir, lonlatranges)
-    plot_distributions2(args.outdir, lonlatranges)
+    plot_distributions2(args.outdir)
 
     # areasentropy = compute_areas_entropy(args.outdir)
     # print(list(areasentropy))
