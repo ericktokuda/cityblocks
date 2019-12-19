@@ -26,7 +26,8 @@ typedef struct {
 
 float mymean(vector<float> v); // Not checking errors
 float mystd(vector<float> v, float avg); // Not checking errors
-float mydiventropy(vector<float> v, float sum_);
+float mydiventropy(vector<float> v);
+float myevenness(vector<float> v);
 int compute_min_distance(vector<int> dist, vector<bool> sptSet);
 void printSolution(vector<int> dist);
 float dijkstra(vector<vector<int>> graph, int src);

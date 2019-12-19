@@ -38,8 +38,11 @@ float mystd(vector<float> v, float avg) {// Not checking errors
 	return sqrt(acc / (v.size() - 1));
 }
 
-float mydiventropy(vector<float> v, float sum_) {
-	float acc = 0;
+float mydiventropy(vector<float> v) {
+	float acc = 0.0, sum_ = 0.0;
+	for(unsigned int i=0; i < v.size(); i++)
+		sum_ += v[i];
+
 	for(unsigned int i=0; i < v.size(); i++) {
 		float a = v[i] / sum_;
 		acc -= a * log(a);
@@ -47,6 +50,10 @@ float mydiventropy(vector<float> v, float sum_) {
 	return acc;
 }
 
+float myevenness(vector<float> v) {
+	float diventr = mydiventropy(v);
+	return exp(diventr) / v.size();
+}
 // A utility function to find the vertex with minimum distance value, from
 // the set of vertices not yet included in shortest path tree
 int compute_min_distance(vector<int> dist, vector<bool> sptSet) {
