@@ -21,10 +21,52 @@ TEST_CASE("mystd", "[mystd]") {
 	CHECK( Approx(mystd(v, 5)) == 7.071 );	//[10, 0]
 }
 
-void print_hello(const char* mystr) {
-	printf("%s", mystr);
+TEST_CASE("mydiventropy", "[mydiventropy]") {
+	vector<float> v(1, 10);
+	CHECK( mydiventropy(v) == Approx(0) );
+
+	vector<float> v2(5, 10);
+	CHECK( mydiventropy(v2) == Approx(log(5)) );
+
+	vector<float> v3{1,1,8};
+	CHECK( mydiventropy(v3) == Approx(-0.1*log(0.1)-0.1*log(0.1)-0.8*log(0.8)) );
 }
 
+TEST_CASE("myevenness", "[myevenness]") {
+	vector<float> v(1, 10);
+	CHECK( mydiventropy(v) == Approx(0) );
+
+	vector<float> v2(5, 10);
+	CHECK( mydiventropy(v2) == Approx(log(5)) );
+
+	vector<float> v3{1,1,8};
+	CHECK( mydiventropy(v3) == Approx(-0.1*log(0.1)-0.1*log(0.1)-0.8*log(0.8)) );
+}
+
+TEST_CASE("get_4connected_neighbours", "[get_4connected_neighbours]") {
+	vector<int> v1{1,3}, v2{1,5,7,3};
+	CHECK_THAT( get_4connected_neighbours(0, 3, 3), Catch::Equals(v1) );
+	CHECK_THAT( get_4connected_neighbours(4, 3, 3), Catch::Equals(v2) );
+}
+
+TEST_CASE("get_grid_nodes", "[get_grid_nodes]") {
+	vector<Node> v1{}, v2{{0,0,0}}, v3{{0,0,0}, {1,0,1}, {2,0,2}, {3,1,0}, {4,1,1}, {5,1,2}};
+	CHECK_THAT( get_grid_nodes(0, 0), Catch::Equals(v1) );
+	CHECK_THAT( get_grid_nodes(1, 1), Catch::Equals(v2) );
+	CHECK_THAT( get_grid_nodes(2, 3), Catch::Equals(v3) );
+}
+
+//vector<int> get_nodes_from_fblock(int fblockid,
+								  //int fblockrows,
+								  //int fblockcols) {
+								  
+TEST_CASE("get_nodes_from_fblock", "[get_nodes_from_block]") {
+	vector<int> v1{};
+	CHECK_THAT( get_nodes_from_fblock(8, 0, 0), Catch::Equals(v1) );
+	//CHECK_THAT( get_nodes_from_fblock(0, 0, 0), Catch::Equals(v1) );
+	//CHECK_THAT( get_grid_nodes(1, 1), Catch::Equals(v2) );
+	//CHECK_THAT( get_grid_nodes(2, 3), Catch::Equals(v3) );
+}
 //void test_get_4connected_neighbours() {
 	//int testnrows[] = {1, 2, 3};
 	//int testncols[] = {0, 2, 4};
