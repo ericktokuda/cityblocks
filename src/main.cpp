@@ -19,7 +19,7 @@ int main(int, char*[]) {
 													 fblockrows, fblockcols);
 	//ofstream _stream;
 	FILE *fh = fopen("/tmp/results.csv", "w");
-	fprintf(fh, "nblocks,avgpathlength,blocksmean,blocksstd,blockscv,blocksdiventr,blocksevenness,degreestd,degreesnonnullstd\n");
+	fprintf(fh, "nblocks,avgpathlength,blocksmean,blocksstd,blockscv,blocksdiventr,blocksevenness,degreestd,degreesnonnullstd,degreesentr\n");
 
 	setbuf(fh, NULL);
 	//_stream.open ("/tmp/result.txt");
@@ -90,13 +90,13 @@ int main(int, char*[]) {
 			if (VECTOR(ig_degrees)[k] > 0)
 				degreesnonnull.push_back(static_cast<float>(VECTOR(ig_degrees)[k]));
 		}
-
+		float degreesentr = myentropy_unitary(degrees);
 		float degreestd = mystd(degrees, mymean(degrees));
 		float degreesnonnullstd = mystd(degreesnonnull, mymean(degreesnonnull));
 
-		fprintf(fh, "%ld,%g,%f,%f,%f,%f,%f,%f,%f\n", blocks.size(), avg_path,
+		fprintf(fh, "%ld,%g,%f,%f,%f,%f,%f,%f,%f,%f\n", blocks.size(), avg_path,
 				blocksmean, blocksstd, blockscv, blocksdiventr, blocksevenness,
-				degreestd, degreesnonnullstd);
+				degreestd, degreesnonnullstd, degreesentr);
 
 		igraph_destroy(&ig_graph);
 	}

@@ -756,6 +756,7 @@ def plot_distributions2(outdir):
     figs = {}
     for k in ['avgpathlengthvsblocksdiventr', 'avgpathlengthvsblocksevenness',
               'avgpathlengthvsdegreestd', 'avgpathlengthvsdegreesnonnullstd',
+              'avgpathlengthvsdegreeentr','degreeentrvsblocksdiventr',
               ]:
         figs[k] = go.Figure()
 
@@ -813,6 +814,34 @@ def plot_distributions2(outdir):
             title="Average path length vs. degrees standard deviation (positive degrees)",
             yaxis_title="Average path length",
             xaxis_title="Degrees standard deviation",
+            # yaxis_type="log"
+            )
+
+    ########################################################## Entropy plots
+    for i, row in df.iterrows():
+         figs['avgpathlengthvsdegreeentr'].add_trace(go.Scatter(
+            x=[row.avgpathlength],
+            y=[row.degreesentr],
+            mode='markers', marker_size=10, name=str(i),))
+    # entropylogpearson = pearsonr(df.areadiventropy, np.log(df.wdistmean/df.segmean))
+    figs['avgpathlengthvsdegreeentr'].update_layout(
+            title="Average path length vs. degrees entropy (positive degrees)",
+            yaxis_title="Average path length",
+            xaxis_title="Entropy of degrees",
+            # yaxis_type="log"
+            )
+
+    ########################################################## Entropy plots
+    for i, row in df.iterrows():
+         figs['degreeentrvsblocksdiventr'].add_trace(go.Scatter(
+            x=[row.degreesentr],
+            y=[row.blocksdiventr],
+            mode='markers', marker_size=10, name=str(i),))
+    # entropylogpearson = pearsonr(df.areadiventropy, np.log(df.wdistmean/df.segmean))
+    figs['degreeentrvsblocksdiventr'].update_layout(
+            title="Degrees entropy vs. block areas divisional entropy",
+            yaxis_title="Entropy of degrees",
+            xaxis_title="Block areas divisional entropy",
             # yaxis_type="log"
             )
     ########################################################## Save to file

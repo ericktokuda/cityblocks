@@ -50,6 +50,18 @@ float mydiventropy(vector<float> v) {
 	return acc;
 }
 
+
+float myentropy_unitary(vector<float> v) {
+	float acc = 0.0;
+
+	for(unsigned int i=0; i < v.size(); i++) {
+		float a = v[i] / v.size();
+		if (a == 0) continue;
+		acc -= a * log(a);
+	}
+	return acc;
+}
+
 float myevenness(vector<float> v) {
 	float diventr = mydiventropy(v);
 	return exp(diventr) / v.size();
@@ -393,4 +405,3 @@ vector<int> get_all_edges_flattened(vector<Block> blocks, vector<Fblock> fblocks
 	return edgesflat;
 }
 template int get_idx_from_id<vector<Block>>(int id, vector<Block> x);
-

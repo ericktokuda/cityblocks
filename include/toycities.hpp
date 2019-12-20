@@ -25,9 +25,13 @@ typedef struct {
 } Block; // Agglomerate of blocks
 
 float mymean(vector<float> v); // Not checking errors
+//template <class T>
+//float mymean(vector<T> v);
 float mystd(vector<float> v, float avg); // Not checking errors
 float mydiventropy(vector<float> v);
 float myevenness(vector<float> v);
+float myentropy_unitary(vector<float> v);
+//float myentropy_unitary(vector<int> v);
 int compute_min_distance(vector<int> dist, vector<bool> sptSet);
 void printSolution(vector<int> dist);
 float dijkstra(vector<vector<int>> graph, int src);
