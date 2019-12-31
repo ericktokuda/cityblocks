@@ -146,22 +146,127 @@ def compute_areas_entropy(outdir):
             areaentropy[binstr][idx] = -np.sum(relfreq * np.log(relfreq))
     return areaentropy
 
+def get_ref_params(graphsdir):
+    for filepath in os.listdir(graphsdir):
+        if not filepath.endswith('.graphml') or \
+                'erdos' in filepath.lower() or 'lattice' in filepath.lower():
+            continue
+        g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+
+        if 'x' in g.vertex_attributes():
+            xs = np.array(g.vs['x']).astype(float)
+        else:
+            xs = np.array(g.vs['posx']).astype(float)
+
+        if 'y' in g.vertex_attributes():
+            ys = np.array(g.vs['y']).astype(float)
+        else:
+            ys = np.array(g.vs['posy']).astype(float)
+
+        mins = np.array([np.min(xs), np.min(ys)])
+        maxs = np.array([np.max(xs), np.max(ys)])
+        return g.vcount(), g.ecount(), mins, maxs, filepath
+
+#############################################################
+def get_4connected_neighbours_2d(i, j, nx, ny, thoroidal=False):
+    """Get 4-connected neighbours. It does not check if there are repeated entries (2x2 or 1x1)
+    Args:
+    i(int): row of the matrix
+    j(int): column of the matrix
+    n(int): side of the square matrix
+    Returns:
+    ndarray 4x2: 4 neighbours indices
+    """
+    inds = []
+    if j > 0: # left
+        inds.append([i, j-1])
+    elif thoroidal:
+        inds.append([i, ny-1])
+
+    if j < ny-1: # right
+        inds.append([i, j+1])
+    elif thoroidal:
+        inds.append([i, 0])
+
+    if i > 0: # top
+        inds.append([i-1, j])
+    elif thoroidal:
+        inds.append([nx-1, j])
+
+    if i < nx-1: # bottom
+        inds.append([i+1, j])
+    elif thoroidal:
+        inds.append([0, j])
+
+    return np.array(inds)
+
 ##########################################################
-def generate_test_graphs(outdir):
-    sz = 20 
-    g = igraph.Graph.Lattice([sz, sz], circular=False) # lattice
-    coords = np.array(g.layout('grid').coords)
-    _range = (np.max(coords, 0) - np.min(coords, 0)) * 10
-    g.vs['x'] = coords[:, 0] / _range[0]
-    g.vs['y'] = coords[:, 1] / _range[1]
+def generate_lattice(ncols, nrows, thoroidal=False, s=10):
+    """Generate 2d lattice of side n
+    Args:
+    n(int): side of the lattice
+    thoroidal(bool): thoroidal lattice
+    s(float): edge size
+    Returns:
+    ndarray nx2, ndarray nxn: positions and adjacency matrix (triangular)
+    """
+    n2 = nrows*ncols
+    pos = np.ndarray((n2, 2), dtype=float)
+    adj = np.zeros((n2, n2), dtype=int)
+
+    k = 0
+    for i in range(nrows):
+        for j in range(ncols): # Set positions
+            pos[k] = [j*s, i*s]
+            k += 1
+
+    for i in range(nrows): # Set connectivity
+        for j in range(ncols):
+            neighs2d = get_4connected_neighbours_2d(i, j, nrows,
+                                                    ncols, thoroidal)
+            neighids = np.ravel_multi_index((neighs2d[:, 0],
+                                             neighs2d[:, 1]),
+                                            (nrows, ncols))
+            curidx = np.ravel_multi_index((i, j), (nrows, ncols))
+
+            for neigh in neighids:
+                adj[curidx, neigh] = 1
+                adj[neigh, curidx] = 1
+    return pos, adj
+
+##########################################################
+def generate_test_graphs(graphsdir, outdir):
+    nvertices, nedges, mins, maxs, refcity = get_ref_params(graphsdir)
+    range_ = (maxs - mins)
+
+    yxratio = range_[1]  / range_[0]
+    info('Generating toy graphs with {} vertices (ref:{})'.format(
+        nvertices, refcity))
+
+    gridnx = np.around(np.sqrt(nvertices/yxratio)).astype(int)
+    gridny = np.around(gridnx*yxratio).astype(int)
+    pos, adj = generate_lattice(gridny, gridnx)
+    g = igraph.Graph.Adjacency(adj.tolist(), mode=igraph.ADJ_UNDIRECTED)
+    coords = pos
+    normalized = (coords - np.min(coords, 0)) / \
+        (np.max(coords, 0) - np.min(coords, 0))
+    scaled = normalized * (maxs - mins) + mins
+    g.vs['x'] = scaled[:, 0]
+    g.vs['y'] = scaled[:, 1]
+    aux = [ (s[0], s[1]) for s in scaled ]
+
     outfilename = pjoin(outdir, 'lattice.graphml')
     igraph.write(g, outfilename, 'graphml')
 
-    g = igraph.Graph.Erdos_Renyi(60, p=1) # lattice
+    g = igraph.Graph.Erdos_Renyi(nvertices, m=nedges) # lattice
+    # coords = np.array(g.layout('fr').coords)
     coords = np.array(g.layout('random').coords)
-    _range = (np.max(coords, 0) - np.min(coords, 0)) * 10
-    g.vs['x'] = coords[:, 0] / _range[0]
-    g.vs['y'] = coords[:, 1] / _range[1]
+    normalized = (coords - np.min(coords, 0)) / \
+        (np.max(coords, 0) - np.min(coords, 0))
+    scaled = normalized * (maxs - mins) + mins
+    g.vs['x'] = scaled[:, 0]
+    g.vs['y'] = scaled[:, 1]
+
     outfilename = pjoin(outdir, 'erdos.graphml')
     igraph.write(g, outfilename, 'graphml')
 
@@ -174,10 +279,12 @@ def add_weights_to_edges(graphsdir, weightdir):
 
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
+
         outpath = pjoin(weightdir, filepath)
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
         g = g.components(mode='weak').giant()
+
         if 'x' in g.vs.attributes():
             g.vs['x'] = np.array(g.vs['x']).astype(float)
             g.vs['y'] = np.array(g.vs['y']).astype(float)
@@ -186,13 +293,14 @@ def add_weights_to_edges(graphsdir, weightdir):
             g.vs['y'] = np.array(g.vs['posy']).astype(float)
 
         del g.vs['id'] # Avoid future warnings
+
         for e in g.es:
-            try:
-                e['weight'] = float(e['length']) / 1000
+            try: # Assuming we are using harvard dataset
+                e['weight'] = float(e['length']) / 1000 # we want in km
             except:
                 coordu = np.array([ g.vs[e.source]['y'], g.vs[e.source]['x'] ])
                 coordv = np.array([ g.vs[e.target]['y'], g.vs[e.target]['x'] ])
-                e['weight'] = haversine(coordu, coordv) # in meters
+                e['weight'] = haversine(coordu, coordv, unit='km')
 
         igraph.write(g, outpath, 'graphml')
 
@@ -202,7 +310,7 @@ def get_maps_ranges(graphsdir, outdir):
 
     if os.path.exists(outpath):
         info('{} already exists. Skipping ...'.format(outpath))
-        return pkl.load(open(outpath, 'rb'))
+        return
 
     info('Getting map ranges ...')
     ranges = {}
@@ -212,10 +320,10 @@ def get_maps_ranges(graphsdir, outdir):
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
         lon = g.vs['x']
         lat = g.vs['y']
-        ranges[k] = np.array([np.min(lon), np.min(lat), np.max(lon), np.max(lat)])
+        ranges[k] = np.array([np.min(lon), np.min(lat),
+                              np.max(lon), np.max(lat)])
 
     pkl.dump(ranges, open(outpath, 'wb'))
-    return ranges
 
 #########################################################
 def plot_graph_raster(graphsdir, skeldir):
@@ -317,8 +425,11 @@ def generate_components_vis(components, compdir):
         cv2.imwrite(outpath, labeled_img)
 
 ##########################################################
-def calculate_block_areas(labels, lonlatranges, outdir):
+def calculate_block_areas(labels, outdir):
     outpath = pjoin(outdir, 'areas.pkl')
+    lonlatrangespath = pjoin(outdir, 'lonlatranges.pkl')
+    lonlatranges =  pkl.load(open(lonlatrangespath, 'rb'))
+
     if os.path.exists(outpath):
         info('{} already exists. Skipping ...'.format(outpath))
         return pkl.load(open(outpath, 'rb'))
@@ -339,7 +450,7 @@ def compute_statistics(graphsdir, allareas, outdir):
     Args:
     areas(dict): city as keys and list of areas as values
     """
-    outpath = pjoin(outdir, 'summary.csv')
+    outpath = pjoin(outdir, 'results.csv')
     if os.path.exists(outpath):
         info('{} already exists. Skipping ...'.format(outpath))
         return
@@ -350,7 +461,7 @@ def compute_statistics(graphsdir, allareas, outdir):
              'areamean,areastd,areacv,areamin,areamax,areasentropy0001,' \
              'areasentropy001,areasentropy01,areasentropy1,areasentropy10,' \
              'areadiventropy,areaeveness,segmean,segstd,udistmean,udiststd,' \
-             'wdistmean,wdiststd,wdistfilteredmean,wdistfilteredstd,betwvmean,betwvstd\n')
+             'avgpathlength,avgpathlengthstd,wdistfilteredmean,wdistfilteredstd,betwvmean,betwvstd\n')
 
     errors = []
 
@@ -853,7 +964,7 @@ def plot_distributions2(outdir):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('graphsdir', help='Graphs directory')
-    parser.add_argument('outdir', default='/tmp/', help='Output directory')
+    parser.add_argument('--outdir', required=False, default='/tmp/', help='Output directory')
     args = parser.parse_args()
 
     logging.basicConfig(format='[%(asctime)s] %(message)s',
@@ -863,17 +974,16 @@ def main():
     compdir = pjoin(args.outdir, 'comp/')
     weightdir = pjoin(args.outdir, 'weighted/')
 
-    # generate_test_graphs(args.graphsdir)
-
-    # add_weights_to_edges(args.graphsdir, weightdir)
-    # lonlatranges = get_maps_ranges(weightdir, args.outdir)
-    # plot_graph_raster(weightdir, skeldir)
-    # components = get_components_from_raster(skeldir, args.outdir)
-    # generate_components_vis(components, compdir)
-    # allareas = calculate_block_areas(components, lonlatranges, args.outdir)
-    # compute_statistics(weightdir, allareas, args.outdir)
+    generate_test_graphs(args.graphsdir, args.graphsdir)
+    add_weights_to_edges(args.graphsdir, weightdir)
+    get_maps_ranges(weightdir, args.outdir)
+    plot_graph_raster(weightdir, skeldir)
+    components = get_components_from_raster(skeldir, args.outdir)
+    generate_components_vis(components, compdir)
+    allareas = calculate_block_areas(components, args.outdir)
+    compute_statistics(weightdir, allareas, args.outdir)
     # plot_distributions(args.outdir, lonlatranges)
-    plot_distributions2(args.outdir)
+    # plot_distributions2(args.outdir)
 
     # areasentropy = compute_areas_entropy(args.outdir)
     # print(list(areasentropy))
