@@ -478,7 +478,8 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
     info('Computing graph statistics...')
     errors = []
 
-    header = 'city,nvertices,nedges,degreeentropy,diameter,nblocks,areasum,' \
+    header = 'city,nvertices,nedges,degreeentropy,diameter,' \
+        'nblocksall,nblocksvalid,areasum,' \
         'areamean,areastd,areacv,areamin,areamax,areasentropy0001,' \
         'areasentropy001,areasentropy01,areasentropy1,areasentropy10,' \
         'areadiventropy,areaeveness,segmean,segstd,udistmean,udiststd,' \
@@ -533,14 +534,17 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
             wdistmean = wdsum / ndists
             wdiststd = ( np.sum(wd2sum) - ((np.sum(wdsum)**2)/ndists)) / ndists
             wdistfilteredmean = wdsumfiltered / ndistsfiltered
-            wdistfilteredstd = ( np.sum(wd2sumfiltered) - ((np.sum(wdsumfiltered)**2)/ndistsfiltered)) / ndistsfiltered
+            aux = ((np.sum(wdsumfiltered)**2)/ndistsfiltered)
+            wdistfilteredstd = ( np.sum(wd2sumfiltered) - aux ) / ndistsfiltered
             nvertices = len(g.vs)
             nedges = len(g.es)
             diameter = g.diameter(weights='weight')
             ##########################################################
 
             a = blockareas[k][2:] # 0: skeleton, 1: background
+            nblocksall = len(a)
             validind = a >= blockminarea
+            nblocksvalid = np.sum(validind)
             a = a[validind]
             arel = a / np.sum(a)
             diventropy = -np.sum(arel * np.log(arel))
@@ -572,7 +576,8 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
 
             ##########################################################
             df.loc[k] = [k, nvertices, nedges, degreeentropy, diameter,
-                         len(a), np.sum(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
+                         nblocksall, nblocksvalid,
+                         np.sum(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
                          np.min(a), np.max(a),
                          areasentropy[0.001], areasentropy[0.01], areasentropy[0.1],
                          areasentropy[1],areasentropy[10], diventropy, evenness,
