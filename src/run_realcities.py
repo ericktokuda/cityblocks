@@ -167,9 +167,8 @@ def compute_areas_entropy(outdir):
 
 def get_ref_params(graphsdir):
     for filepath in os.listdir(graphsdir):
-        if not filepath.endswith('.graphml') or \
-                'erdos' in filepath.lower() or 'lattice' in filepath.lower():
-            continue
+        if not filepath.endswith('.graphml'): continue
+
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
 
         if 'x' in g.vertex_attributes():
@@ -275,22 +274,30 @@ def generate_test_graphs(graphsdir, outdir):
 
     aux = [ (s[0], s[1]) for s in scaled ]
 
-    outfilename = pjoin(outdir, 'lattice.graphml')
-    igraph.write(g, outfilename, 'graphml')
+    g = add_weights_to_edges(g)
+    outfilename = pjoin(outdir, 'lattice.pkl')
+    pkl.dump(g, open(outfilename, 'wb'))
 
-    # g = igraph.Graph.Erdos_Renyi(nvertices, m=nedges) # lattice
-    # coords = np.array(g.layout('random').coords)
-    # normalized = (coords - np.min(coords, 0)) / \
-        # (np.max(coords, 0) - np.min(coords, 0))
-    # scaled = normalized * (maxs - mins) + mins
-    # g.vs['x'] = scaled[:, 0]
-    # g.vs['y'] = scaled[:, 1]
-
-    # outfilename = pjoin(outdir, 'erdos.graphml')
-    # igraph.write(g, outfilename, 'graphml')
+    delratio = .25
+    nedges = g.ecount()
+    aux = np.random.rand(int(nedges*delratio))*nedges
+    g.delete_edges(aux.astype(int))
+    g = add_weights_to_edges(g)
+    outfilename = pjoin(outdir, 'lattice_{}.pkl'.format(int(delratio*100)))
+    pkl.dump(g, open(outfilename, 'wb'))
 
 ##########################################################
-def add_weights_to_edges(graphsdir, weightdir):
+def add_weights_to_edges(g):
+    for e in g.es:
+        try: # Assuming we are using harvard dataset
+            e['weight'] = float(e['length']) / 1000 # we want in km
+        except:
+            coordu = np.array([ g.vs[e.source]['y'], g.vs[e.source]['x'] ])
+            coordv = np.array([ g.vs[e.target]['y'], g.vs[e.target]['x'] ])
+            e['weight'] = haversine(coordu, coordv, unit='km')
+    return g
+
+def parse_graphml(graphsdir, weightdir):
     if os.path.exists(weightdir):
         info('{} already exists. Skipping ...'.format(weightdir))
         return
@@ -299,7 +306,7 @@ def add_weights_to_edges(graphsdir, weightdir):
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
 
-        outpath = pjoin(weightdir, filepath)
+        outpath = pjoin(weightdir, filepath.replace('.graphml', '.pkl'))
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
         g = g.components(mode='weak').giant()
@@ -311,17 +318,12 @@ def add_weights_to_edges(graphsdir, weightdir):
             g.vs['x'] = np.array(g.vs['posx']).astype(float)
             g.vs['y'] = np.array(g.vs['posy']).astype(float)
 
-        del g.vs['id'] # Avoid future warnings
+        if 'id' in g.vertex_attributes():
+            del g.vs['id'] # Avoid future warnings
 
-        for e in g.es:
-            try: # Assuming we are using harvard dataset
-                e['weight'] = float(e['length']) / 1000 # we want in km
-            except:
-                coordu = np.array([ g.vs[e.source]['y'], g.vs[e.source]['x'] ])
-                coordv = np.array([ g.vs[e.target]['y'], g.vs[e.target]['x'] ])
-                e['weight'] = haversine(coordu, coordv, unit='km')
+        g = add_weights_to_edges(g)
 
-        igraph.write(g, outpath, 'graphml')
+        pkl.dump(g, open(outpath, 'wb'))
 
 ##########################################################
 def get_maps_ranges(graphsdir, outdir):
@@ -335,8 +337,9 @@ def get_maps_ranges(graphsdir, outdir):
     ranges = {}
     for filepath in os.listdir(graphsdir):
         k = os.path.splitext(filepath)[0]
-        if not filepath.endswith('.graphml'): continue
-        g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        if not filepath.endswith('.pkl'): continue
+        # g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        g = pkl.load(open(pjoin(graphsdir, filepath), 'rb'))
         lon = g.vs['x']
         lat = g.vs['y']
         ranges[k] = np.array([np.min(lon), np.min(lat),
@@ -355,9 +358,13 @@ def plot_graph_raster(graphsdir, skeldir, figscale=20000):
     info('Reading graphs from {} ...'.format(graphsdir))
     allareas = {}
     for filepath in os.listdir(graphsdir):
-        if not filepath.endswith('.graphml'): continue
+        if not filepath.endswith('.pkl'): continue
         info(' *' + filepath)
-        g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        # g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        g = pkl.load(open(pjoin(graphsdir, filepath), 'rb'))
+        # import matplotlib.pyplot as plt
+        # plt.scatter(g.vs['x'], g.vs['y'])
+        # plt.show()
         for ed in g.es():
             if 'geometry' not in ed.attributes(): continue # split lines
             if ed['geometry'] == None or ed['geometry'] == '': continue
@@ -483,7 +490,7 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
         'areamean,areastd,areacv,areamin,areamax,areasentropy0001,' \
         'areasentropy001,areasentropy01,areasentropy1,areasentropy10,' \
         'areadiventropy,areaeveness,segmean,segstd,udistmean,udiststd,' \
-        'avgpathlength,avgpathlengthstd,wdistfilteredmean,wdistfilteredstd,'\
+        'wdistmean,wdiststd,'\
         'betwvmean,betwvstd'
 
     df = pd.DataFrame(columns=header.split(','),
@@ -491,75 +498,69 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
 
     for k in sorted(blockareas.keys()):
         info(' *' + k)
+        # if True:
         try:
-            filepath = pjoin(graphsdir, k + '.graphml')
-            g = igraph.Graph.Read(filepath)
+            filepath = pjoin(graphsdir, k + '.pkl')
+            # g = igraph.Graph.Read(filepath)
+            g = pkl.load(open(filepath, 'rb'))
 
-            n = len(g.vs)
-            ndists = int((n * (n-1)) / 2)
+            nvertices = g.vcount()
+            nedges = g.ecount()
+            ndists = int((nvertices * (nvertices-1)) / 2)
 
             udsum = 0.0
             ud2sum = 0.0
             wdsum = 0.0
             wd2sum = 0.0
-            wdsumfiltered = 0.0
-            wd2sumfiltered = 0.0
-            ndistsfiltered = 0
 
-            ##########################################################
-            # Using the function for all vertice at once crashes
-            for i in range(n):
+            ########################################################## avg paths
+            for i in range(nvertices): # Calling with all vertice at once crashes
+                # Unweighted paths
                 aux = np.array(g.shortest_paths(source=i, mode='ALL'))[0][i+1:]
                 udsum += np.sum(aux)
                 ud2sum += np.sum(np.square(aux))
 
+                # Weighted paths
                 aux = np.array(g.shortest_paths(source=i, mode='ALL',
                     weights=g.es['weight']))[0][i+1:]
                 wdsum += np.sum(aux)
                 wd2sum += np.sum(np.square(aux))
 
-                wdsumfiltered += np.sum(aux[aux > 1])
-                wd2sumfiltered += np.sum(np.square(aux[aux>1]))
-                ndistsfiltered += len(aux[aux>1])
-
-            segmean = np.mean(g.es['weight'])
-            segstd = np.std(g.es['weight'])
-            
-            bv = g.betweenness()
-            betwvmean = np.mean(bv)
-            betwvstd = np.std(bv)
-
             udistmean = udsum / ndists
             udiststd = ( np.sum(ud2sum) - ((np.sum(udsum)**2)/ndists)) / ndists
             wdistmean = wdsum / ndists
             wdiststd = ( np.sum(wd2sum) - ((np.sum(wdsum)**2)/ndists)) / ndists
-            wdistfilteredmean = wdsumfiltered / ndistsfiltered
-            aux = ((np.sum(wdsumfiltered)**2)/ndistsfiltered)
-            wdistfilteredstd = ( np.sum(wd2sumfiltered) - aux ) / ndistsfiltered
-            nvertices = len(g.vs)
-            nedges = len(g.es)
+
+            ########################################################## segments
             diameter = g.diameter(weights='weight')
-            ##########################################################
+            segmean = np.mean(g.es['weight'])
+            segstd = np.std(g.es['weight'])
+            
+            ########################################################## betweenness
+            bv = g.betweenness()
+            betwvmean = np.mean(bv)
+            betwvstd = np.std(bv)
 
-            a = blockareas[k][2:] # 0: skeleton, 1: background
-            nblocksall = len(a)
-            validind = a >= blockminarea
-            nblocksvalid = np.sum(validind)
-            a = a[validind]
-            arel = a / np.sum(a)
-            diventropy = -np.sum(arel * np.log(arel))
-            evenness = np.exp(diventropy) / len(arel)
-
-            ##########################################################
+            ########################################################## node degrees
             degrees = g.degree()
             N = np.sum(degrees)
             freq = np.array([len(list(group)) for key, group in groupby(degrees)]) / N
             degreeentropy = -np.sum(freq * np.log(freq))
+
+            ########################################################## block areas
+            areas = blockareas[k][2:] # 0: skeleton, 1: background
+            nblocksall = len(areas)
+            validind = areas >= blockminarea
+            nblocksvalid = np.sum(validind)
+            areas = areas[validind]
+            arel = areas / np.sum(areas)
+            diventropy = -np.sum(arel * np.log(arel))
+            evenness = np.exp(diventropy) / len(arel)
+
             ##########################################################
             binsize = [0.001, 0.01, 0.1, 1, 10]
             areasentropy = {}
             for b in binsize:
-                areas = blockareas[k]
                 areamax = np.max(areas)
                 nticks = int(areamax / b) + 1
                 _ticks = np.ndarray(nticks)
@@ -573,16 +574,16 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
                 relfreq = hist / np.sum(hist)
                 areasentropy[b] = -np.sum(relfreq * np.log(relfreq))
 
-
-            ##########################################################
+            ########################################################## exporting
+            a = areas
             df.loc[k] = [k, nvertices, nedges, degreeentropy, diameter,
                          nblocksall, nblocksvalid,
                          np.sum(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
                          np.min(a), np.max(a),
                          areasentropy[0.001], areasentropy[0.01], areasentropy[0.1],
-                         areasentropy[1],areasentropy[10], diventropy, evenness,
+                         areasentropy[1], areasentropy[10], diventropy, evenness,
                          segmean, segstd, udistmean, udiststd, wdistmean, wdiststd,
-                         wdistfilteredmean, wdistfilteredstd, betwvmean, betwvstd,
+                         betwvmean, betwvstd,
                          ]
         except:
             errors.append(k)
@@ -1011,8 +1012,8 @@ def main():
     figscale = 20000
     blockminarea = 0.0004
 
-    generate_test_graphs(args.graphsdir, args.graphsdir)
-    add_weights_to_edges(args.graphsdir, weightdir)
+    parse_graphml(args.graphsdir, weightdir)
+    generate_test_graphs(args.graphsdir, weightdir)
     get_maps_ranges(weightdir, args.outdir)
     plot_graph_raster(weightdir, skeldir, figscale)
     components = get_components_from_raster(skeldir, args.outdir)
