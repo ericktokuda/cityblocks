@@ -76,7 +76,7 @@ def calculate_real_area(coords, unit='km'):
         return -1 # Invalid polygon
 
 ##########################################################
-def colorize(labels):
+def colorize_random(labels):
     ulabels = np.unique(labels)
     _colors = np.random.randint(0, 255, (len(ulabels), 3))
 
@@ -88,30 +88,49 @@ def colorize(labels):
     return labeled_img
 
 ##########################################################
+def colorize_by_size(labels):
+    ulabels, counts = np.unique(labels, return_counts=True)
+    m = (np.max(counts))
+
+    labeled_img = np.zeros((labels.shape[0], labels.shape[1], 3), dtype=np.uint8)
+
+    # Label regions
+    for i, lab in enumerate(ulabels): # 0: skeleton, 1: external part
+        if i < 2: continue
+        z = np.where(labels == lab)
+        labeled_img[z] = [0, int(((counts[i])/m) * 240) + 15, 0]
+
+    # Label skeleton
+    z = np.where(labels == 0)
+    labeled_img[z] = [255]*3
+    return labeled_img
+
+##########################################################
 def compute_raster_real_conversion(rasterranges, lonlatranges):
     conversionfactors = {}
     for k, c in lonlatranges.items():
-        coords = np.array([ [c[0], c[1]], [c[0], c[3]], [c[2], c[3]], [c[2], c[1]], ])
-        real = calculate_real_area(coords)
+        realbboxcoords = np.array([[c[0], c[1]], [c[0], c[3]],
+                                   [c[2], c[3]], [c[2], c[1]], ])
+        real = calculate_real_area(realbboxcoords)
         r = rasterranges[k]
         raster = (r[2] - r[0]) * (r[3] - r[1])
-        conversionfactors[k] = real/raster
+        conversionfactors[k] = real / raster
     return conversionfactors
 
 ##########################################################
-def calculate_raster_areas(labels, outdir):
+def calculate_raster_areas(labels, outdir): # It contains both the skeleton and outer
     info('Computing block areas from components ...')
 
-    areas = {}
-    ranges = {}
+    allareas = {}
+    skelranges = {}
     for k, label in labels.items():
         info(' *' + k)
-        ulabels, area = np.unique(label, return_counts=True)
-        areas[k] = np.array(area)
-        skelids = np.where(label == 1) # 1: skeleton (cv2)
-        ranges[k] = np.array([ np.min(skelids[0]),  np.min(skelids[1]),
+        _, areas = np.unique(label, return_counts=True)
+        allareas[k] = np.array(areas) # Eliminate skeleton and external part later
+        skelids = np.where(label == 0) # skeleton (cv2)
+        skelranges[k] = np.array([ np.min(skelids[0]),  np.min(skelids[1]),
             np.max(skelids[0]), np.max(skelids[1]) ])
-    return areas, ranges
+    return allareas, skelranges
 
 ##########################################################
 def filter_areas(areas):
@@ -253,22 +272,22 @@ def generate_test_graphs(graphsdir, outdir):
     scaled = normalized * (maxs - mins) + mins
     g.vs['x'] = scaled[:, 0]
     g.vs['y'] = scaled[:, 1]
+
     aux = [ (s[0], s[1]) for s in scaled ]
 
     outfilename = pjoin(outdir, 'lattice.graphml')
     igraph.write(g, outfilename, 'graphml')
 
-    g = igraph.Graph.Erdos_Renyi(nvertices, m=nedges) # lattice
-    # coords = np.array(g.layout('fr').coords)
-    coords = np.array(g.layout('random').coords)
-    normalized = (coords - np.min(coords, 0)) / \
-        (np.max(coords, 0) - np.min(coords, 0))
-    scaled = normalized * (maxs - mins) + mins
-    g.vs['x'] = scaled[:, 0]
-    g.vs['y'] = scaled[:, 1]
+    # g = igraph.Graph.Erdos_Renyi(nvertices, m=nedges) # lattice
+    # coords = np.array(g.layout('random').coords)
+    # normalized = (coords - np.min(coords, 0)) / \
+        # (np.max(coords, 0) - np.min(coords, 0))
+    # scaled = normalized * (maxs - mins) + mins
+    # g.vs['x'] = scaled[:, 0]
+    # g.vs['y'] = scaled[:, 1]
 
-    outfilename = pjoin(outdir, 'erdos.graphml')
-    igraph.write(g, outfilename, 'graphml')
+    # outfilename = pjoin(outdir, 'erdos.graphml')
+    # igraph.write(g, outfilename, 'graphml')
 
 ##########################################################
 def add_weights_to_edges(graphsdir, weightdir):
@@ -326,7 +345,7 @@ def get_maps_ranges(graphsdir, outdir):
     pkl.dump(ranges, open(outpath, 'wb'))
 
 #########################################################
-def plot_graph_raster(graphsdir, skeldir):
+def plot_graph_raster(graphsdir, skeldir, figscale=20000):
     if os.path.exists(skeldir):
         info('{} already exists. Skipping ...'.format(skeldir))
         return
@@ -335,7 +354,6 @@ def plot_graph_raster(graphsdir, skeldir):
 
     info('Reading graphs from {} ...'.format(graphsdir))
     allareas = {}
-    figfactor = 20000
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
         info(' *' + filepath)
@@ -363,8 +381,8 @@ def plot_graph_raster(graphsdir, skeldir):
         lonrange = [np.min(g.vs['x']), np.max(g.vs['x'])]
         latrange = [np.min(g.vs['y']), np.max(g.vs['y'])]
 
-        lonfigsize = (lonrange[1] - lonrange[0])*figfactor
-        latfigsize = (latrange[1] - latrange[0])*figfactor
+        lonfigsize = (lonrange[1] - lonrange[0])*figscale
+        latfigsize = (latrange[1] - latrange[0])*figscale
 
         COL='#000000'
         # COL='#4e7f80'
@@ -380,6 +398,7 @@ def plot_graph_raster(graphsdir, skeldir):
 
         outpath = pjoin(skeldir, os.path.splitext(filepath)[0] + '.png')
         layout = [ (x, -y) for x, y in zip(g.vs['x'], g.vs['y']) ]
+
         igraph.plot(g, target=outpath, layout=layout, **visual)
 
 ##########################################################
@@ -420,7 +439,8 @@ def generate_components_vis(components, compdir):
 
     for k, labels in components.items():
         info(' *' + k)
-        labeled_img = colorize(labels)
+        # labeled_img = colorize_random(labels)
+        labeled_img = colorize_by_size(labels)
         outpath = pjoin(compdir, k + '_labels.png')
         cv2.imwrite(outpath, labeled_img)
 
@@ -434,8 +454,8 @@ def calculate_block_areas(labels, outdir):
         info('{} already exists. Skipping ...'.format(outpath))
         return pkl.load(open(outpath, 'rb'))
 
-    areas, rasterranges = calculate_raster_areas(labels, outdir)
-    conversionfactors = compute_raster_real_conversion(rasterranges, lonlatranges)
+    areas, skelranges = calculate_raster_areas(labels, outdir)
+    conversionfactors = compute_raster_real_conversion(skelranges, lonlatranges)
 
     for k in areas.keys():
         areas[k] = areas[k] * conversionfactors[k]
@@ -444,7 +464,7 @@ def calculate_block_areas(labels, outdir):
 
 
 ##########################################################
-def compute_statistics(graphsdir, allareas, outdir):
+def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
     """Compute statistics from areas
 
     Args:
@@ -456,18 +476,20 @@ def compute_statistics(graphsdir, allareas, outdir):
         return
 
     info('Computing graph statistics...')
-    fh = open(outpath, 'w', buffering=1)
-    fh.write('city,nvertices,nedges,degreeentropy,diameter,nblocks,areasum,' \
-             'areamean,areastd,areacv,areamin,areamax,areasentropy0001,' \
-             'areasentropy001,areasentropy01,areasentropy1,areasentropy10,' \
-             'areadiventropy,areaeveness,segmean,segstd,udistmean,udiststd,' \
-             'avgpathlength,avgpathlengthstd,wdistfilteredmean,wdistfilteredstd,betwvmean,betwvstd\n')
-
     errors = []
 
-    for k in sorted(allareas.keys()):
+    header = 'city,nvertices,nedges,degreeentropy,diameter,nblocks,areasum,' \
+        'areamean,areastd,areacv,areamin,areamax,areasentropy0001,' \
+        'areasentropy001,areasentropy01,areasentropy1,areasentropy10,' \
+        'areadiventropy,areaeveness,segmean,segstd,udistmean,udiststd,' \
+        'avgpathlength,avgpathlengthstd,wdistfilteredmean,wdistfilteredstd,'\
+        'betwvmean,betwvstd'
+
+    df = pd.DataFrame(columns=header.split(','),
+                          index=blockareas.keys())
+
+    for k in sorted(blockareas.keys()):
         info(' *' + k)
-        # if True:
         try:
             filepath = pjoin(graphsdir, k + '.graphml')
             g = igraph.Graph.Read(filepath)
@@ -517,7 +539,9 @@ def compute_statistics(graphsdir, allareas, outdir):
             diameter = g.diameter(weights='weight')
             ##########################################################
 
-            a = allareas[k][2:] # 0: skeleton, 1: background
+            a = blockareas[k][2:] # 0: skeleton, 1: background
+            validind = a >= blockminarea
+            a = a[validind]
             arel = a / np.sum(a)
             diventropy = -np.sum(arel * np.log(arel))
             evenness = np.exp(diventropy) / len(arel)
@@ -531,7 +555,7 @@ def compute_statistics(graphsdir, allareas, outdir):
             binsize = [0.001, 0.01, 0.1, 1, 10]
             areasentropy = {}
             for b in binsize:
-                areas = allareas[k]
+                areas = blockareas[k]
                 areamax = np.max(areas)
                 nticks = int(areamax / b) + 1
                 _ticks = np.ndarray(nticks)
@@ -545,22 +569,27 @@ def compute_statistics(graphsdir, allareas, outdir):
                 relfreq = hist / np.sum(hist)
                 areasentropy[b] = -np.sum(relfreq * np.log(relfreq))
 
+
             ##########################################################
-            st = [k, nvertices, nedges, degreeentropy, diameter,
-                  len(a), np.sum(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
-                  np.min(a), np.max(a),
-                  areasentropy[0.001], areasentropy[0.01], areasentropy[0.1],
-                  areasentropy[1],areasentropy[10], diventropy, evenness,
-                  segmean, segstd, udistmean, udiststd, wdistmean, wdiststd,
-                  wdistfilteredmean, wdistfilteredstd, betwvmean, betwvstd,
-                  ]
-            fh.write(','.join([ str(s) for s in st]) + '\n')
+            df.loc[k] = [k, nvertices, nedges, degreeentropy, diameter,
+                         len(a), np.sum(a), np.mean(a), np.std(a), np.std(a)/np.mean(a),
+                         np.min(a), np.max(a),
+                         areasentropy[0.001], areasentropy[0.01], areasentropy[0.1],
+                         areasentropy[1],areasentropy[10], diventropy, evenness,
+                         segmean, segstd, udistmean, udiststd, wdistmean, wdiststd,
+                         wdistfilteredmean, wdistfilteredstd, betwvmean, betwvstd,
+                         ]
         except:
             errors.append(k)
 
+    df.to_csv(outpath, index=False)
+
+    info('ATTRIB\t\tMEAN(STD)')
+    for col in df.columns:
+        if col == 'city': continue
+        info('{}:\t{:.3f} ({:.3f})'.format(col, np.mean(df[col]), np.std(df[col])))
     info('Errors:')
     info(errors)
-    fh.close()
 
 ##########################################################
 def plot_distributions(outdir, lonlatranges):
@@ -974,14 +1003,18 @@ def main():
     compdir = pjoin(args.outdir, 'comp/')
     weightdir = pjoin(args.outdir, 'weighted/')
 
+    figscale = 20000
+    blockminarea = 0.0004
+
     generate_test_graphs(args.graphsdir, args.graphsdir)
     add_weights_to_edges(args.graphsdir, weightdir)
     get_maps_ranges(weightdir, args.outdir)
-    plot_graph_raster(weightdir, skeldir)
+    plot_graph_raster(weightdir, skeldir, figscale)
     components = get_components_from_raster(skeldir, args.outdir)
     generate_components_vis(components, compdir)
-    allareas = calculate_block_areas(components, args.outdir)
-    compute_statistics(weightdir, allareas, args.outdir)
+    areas = calculate_block_areas(components, args.outdir)
+    compute_statistics(weightdir, areas, blockminarea, args.outdir)
+    return
     # plot_distributions(args.outdir, lonlatranges)
     # plot_distributions2(args.outdir)
 
