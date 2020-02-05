@@ -23,6 +23,16 @@ int main(int, char*[]) {
 
 	setbuf(fh, NULL);
 	//_stream.open ("/tmp/result.txt");
+	
+	for (int k = 0; k < blocks.size(); k++) {
+		printf("%d:", blocks[k].id);
+		for (int l = 0; l < blocks[k].fblocks.size(); l++) {
+			printf("%d,", blocks[k].fblocks[l]);
+		}
+		printf(";");
+	}
+	printf("\n");
+
 	for (int i = 0; i < 5000; i++) {
 		if (blocks.size() == 1) break;
 		// sample a block
@@ -99,6 +109,14 @@ int main(int, char*[]) {
 				degreestd, degreesnonnullstd, degreesentr);
 
 		igraph_destroy(&ig_graph);
+	for (int k = 0; k < blocks.size(); k++) {
+		printf("%d:", blocks[k].id);
+		for (int l = 0; l < blocks[k].fblocks.size(); l++) {
+			printf("%d,", blocks[k].fblocks[l]);
+		}
+		printf(";");
+	}
+	printf("\n");
 	}
 	return 0;
 }

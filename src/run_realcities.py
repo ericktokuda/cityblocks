@@ -135,12 +135,6 @@ def calculate_raster_areas(labels, outdir): # It contains both the skeleton and 
     return allareas, skelranges
 
 ##########################################################
-def filter_areas(areas):
-    for k, v in areas.items():
-        areas[k] = v[2:]
-    return areas
-
-##########################################################
 def compute_areas_entropy(outdir):
     areaentropy = {}
     allareas = pkl.load(open(pjoin(outdir, 'areas.pkl'), 'rb'))
@@ -167,6 +161,7 @@ def compute_areas_entropy(outdir):
             areaentropy[binstr][idx] = -np.sum(relfreq * np.log(relfreq))
     return areaentropy
 
+#############################################################
 def get_ref_params(graphsdir):
     for filepath in os.listdir(graphsdir):
         if not filepath.endswith('.graphml'): continue
@@ -303,6 +298,7 @@ def add_weights_to_edges(g):
             e['weight'] = haversine(coordu, coordv, unit='km')
     return g
 
+#############################################################
 def parse_graphml(graphsdir, weightdir):
     if os.path.exists(weightdir):
         info('{} already exists. Skipping ...'.format(weightdir))
@@ -355,22 +351,17 @@ def get_maps_ranges(graphsdir, outdir):
 
 #########################################################
 def plot_graph_raster(graphsdir, skeldir, figscale=20000):
-    if os.path.exists(skeldir):
-        info('{} already exists. Skipping ...'.format(skeldir))
-        return
-
-    os.makedirs(skeldir)
+    if not os.path.exists(skeldir):
+        # info('{} already exists. Skipping ...'.format(skeldir))
+        os.makedirs(skeldir)
 
     info('Reading graphs from {} ...'.format(graphsdir))
     allareas = {}
     for filepath in os.listdir(graphsdir):
-        if not filepath.endswith('.pkl'): continue
         info(' *' + filepath)
-        # g = igraph.Graph.Read(pjoin(graphsdir, filepath))
+        outpath = pjoin(skeldir, os.path.splitext(filepath)[0] + '.png')
+        if not filepath.endswith('.pkl') or os.path.exists(outpath): continue
         g = pkl.load(open(pjoin(graphsdir, filepath), 'rb'))
-        # import matplotlib.pyplot as plt
-        # plt.scatter(g.vs['x'], g.vs['y'])
-        # plt.show()
         for ed in g.es():
             if 'geometry' not in ed.attributes(): continue # split lines
             if ed['geometry'] == None or ed['geometry'] == '': continue
@@ -409,7 +400,6 @@ def plot_graph_raster(graphsdir, skeldir, figscale=20000):
             bbox = (lonfigsize, latfigsize)
         )
 
-        outpath = pjoin(skeldir, os.path.splitext(filepath)[0] + '.png')
         layout = [ (x, -y) for x, y in zip(g.vs['x'], g.vs['y']) ]
 
         igraph.plot(g, target=outpath, layout=layout, **visual)
@@ -440,7 +430,6 @@ def get_components_from_raster(rasterdir, outdir):
     pkl.dump(components, open(outpath, 'wb'))
     return components
 
-
 ##########################################################
 def generate_components_vis(components, compdir):
     if os.path.exists(compdir):
@@ -453,9 +442,10 @@ def generate_components_vis(components, compdir):
     for k, labels in components.items():
         info(' *' + k)
         if k == '0662602_Rolling_Hills': continue #TODO: fix this
+        outpath = pjoin(compdir, k + '_labels.png')
+        if os.path.exists(outpath): continue
         # labeled_img = colorize_random(labels)
         labeled_img = colorize_by_size(labels)
-        outpath = pjoin(compdir, k + '_labels.png')
         cv2.imwrite(outpath, labeled_img)
 
 ##########################################################
@@ -475,7 +465,6 @@ def calculate_block_areas(labels, outdir):
         areas[k] = areas[k] * conversionfactors[k]
     pkl.dump(areas, open(outpath, 'wb'))
     return areas
-
 
 ##########################################################
 def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
@@ -605,299 +594,7 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
     info(errors)
 
 ##########################################################
-def plot_distributions(outdir, lonlatranges):
-    """Plot distributions for each array of areas
-
-    Args:
-    allareas(dict): filename as key and areas as values
-    epsilon(float): value to consider as invalid area
-    """
-
-    info('Plotting distributions of data from {} ...'.format(pjoin(outdir, 'summary.csv')))
-    figs = {}
-    for k in ['meanpathvsdiventr', 'meanpathvsareasentr001',  'meanpathvsareasentr01',
-              'meanpathvsareasentr1', 'meanpathvsdiventrfiltered',
-              'degrentrvsareaentr0001', 'degrentrvsareaentr001',
-              'degrentrvsareaentr01', 'degrentrvsareaentr1', 'degrentrvsareaentr10',
-              'degrentrvsareadiventr',
-              'entropydiagonallog', 'meanpathcvvsareasdiventr',
-              'meanpathvsdegrentr',  'meanpathvsareaevenness', 'meanpathcvvsareaevenness',
-              'entropyhist', 'areaevennesshist']:
-        figs[k] = go.Figure()
-
-    ########################################################## Area plots
-    areaspath = pjoin(outdir, 'areas.pkl')
-    allareas = pkl.load(open(areaspath, 'rb'))
-    allareas = filter_areas(allareas) # 0: skeleton, 1: background
-
-    df = pd.read_csv(pjoin(outdir, 'summary.csv'))
-
-    ########################################################## Entropy plots
-    for _, row in df.iterrows():
-         figs['meanpathvsdiventr'].add_trace(go.Scatter(
-            x=[row.areadiventropy],
-            y=[np.log(row.wdistmean/row.segmean)],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df.areadiventropy, np.log(df.wdistmean/df.segmean))
-    figs['meanpathvsdiventr'].update_layout(
-            title="Entropy of areas vs. logarithm of the normalized average path length (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Logarithm of the normalized average path length",
-            # yaxis_type="log"
-            )
-
-    for _, row in df.iterrows():
-         figs['meanpathvsareasentr001'].add_trace(go.Scatter(
-            x=[row.areasentropy001],
-            y=[row.wdistmean/row.segmean/row.diameter],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df.areasentropy001, df.wdistmean/df.segmean/df.diameter)
-    figs['meanpathvsareasentr001'].update_layout(
-            title="Entropy of areas vs. the normalized average path length (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Normalized average path length (/meanseglenght/diameter)",
-            # yaxis_type="log"
-            )
-
-    for _, row in df.iterrows():
-         figs['meanpathvsareasentr01'].add_trace(go.Scatter(
-            x=[row.areasentropy01],
-            y=[row.wdistmean/row.segmean/row.diameter],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df.areasentropy01, df.wdistmean/df.segmean/df.diameter)
-    figs['meanpathvsareasentr01'].update_layout(
-            title="Entropy of areas vs. the normalized average path length (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Normalized average path length (/meanseglenght/diameter)",
-            # yaxis_type="log"
-            )
-
-    for _, row in df.iterrows():
-         figs['meanpathvsareasentr1'].add_trace(go.Scatter(
-            x=[row.areasentropy1],
-            y=[row.wdistmean/row.segmean/row.diameter],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df.areasentropy1, df.wdistmean/df.segmean/df.diameter)
-    figs['meanpathvsareasentr1'].update_layout(
-            title="Entropy of areas vs. the normalized average path length (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Normalized average path length (/meanseglenght/diameter)",
-            # yaxis_type="log"
-            )
-
-    df2 = df[ (df.areasum > 5) & (df.areasum < 7) ].copy()
-    if df2.shape[0] == 0: info('Empty dataframe after filtering')
-    df2.city.to_csv(pjoin(outdir, 'cities_130.csv'), header=False, index=False)
-    for _, row in df2.iterrows():
-         figs['meanpathvsdiventrfiltered'].add_trace(go.Scatter(
-            x=[row.areadiventropy],
-            y=[row.wdistmean],
-            mode='markers',
-            marker_size=10,
-            name=row.city,
-            ))
-    entropylogpearson = pearsonr(df2.areadiventropy, np.log(df2.wdistmean))
-    figs['meanpathvsdiventrfiltered'].update_layout(
-            title="Divisional entropy of areas vs. average path length non-normalized (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Divisional entropy of block area",
-            yaxis_title="Average path length",
-            yaxis_type="log"
-            )
-
-    for _, row in df.iterrows():
-         figs['degrentrvsareaentr0001'].add_trace(go.Scatter(
-            x=[row['areasentropy0001']],
-            y=[row.degreeentropy],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df['areasentropy0001'], df.degreeentropy)
-    figs['degrentrvsareaentr0001'].update_layout(
-            title="Entropy of areas (bin=0.001) vs. Entropy of degree (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Entropy of degrees",
-            )
-
-    for _, row in df.iterrows():
-         figs['degrentrvsareaentr001'].add_trace(go.Scatter(
-            x=[row['areasentropy001']],
-            y=[row.degreeentropy],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df['areasentropy001'], df.degreeentropy)
-    figs['degrentrvsareaentr001'].update_layout(
-            title="Entropy of areas (bin=0.01) vs. Entropy of degree (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Entropy of degrees",
-            )
-
-    for _, row in df.iterrows():
-         figs['degrentrvsareaentr01'].add_trace(go.Scatter(
-            x=[row['areasentropy01']],
-            y=[row.degreeentropy],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df['areasentropy01'], df.degreeentropy)
-    figs['degrentrvsareaentr01'].update_layout(
-            title="Entropy of areas (bin=0.1) vs. Entropy of degree (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Entropy of degrees",
-            )
-
-    for _, row in df.iterrows():
-         figs['degrentrvsareaentr1'].add_trace(go.Scatter(
-            x=[row['areasentropy1']],
-            y=[row.degreeentropy],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df['areasentropy1'], df.degreeentropy)
-    figs['degrentrvsareaentr1'].update_layout(
-            title="Entropy of areas (bin=1) vs. Entropy of degree (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Entropy of degrees",
-            )
-
-
-    for _, row in df.iterrows():
-         figs['degrentrvsareaentr10'].add_trace(go.Scatter(
-            x=[row['areasentropy10']],
-            y=[row.degreeentropy],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df['areasentropy10'], df.degreeentropy)
-    figs['degrentrvsareaentr10'].update_layout(
-            title="Entropy of areas (bin=10) vs. Entropy of degree (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Entropy of degrees",
-            )
-
-    for _, row in df.iterrows():
-         figs['degrentrvsareadiventr'].add_trace(go.Scatter(
-            x=[row.areadiventropy],
-            y=[row.degreeentropy],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df.areadiventropy, df.degreeentropy)
-    figs['degrentrvsareadiventr'].update_layout(
-            title="Divisional entropy of areas vs. Entropy of degree (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Divisional entropy of block area",
-            yaxis_title="Entropy of degrees",
-            )
-
-    for _, row in df.iterrows():
-        figs['meanpathcvvsareasdiventr'].add_trace(go.Scatter(
-            x=[row.areadiventropy],
-            y=[np.log(row.wdiststd/row.wdistmean/row.segmean)],
-            mode='markers', marker_size=10, name=row.city,))
-    entropycvlogpearson = pearsonr(df.areadiventropy, np.log(df.wdiststd/df.wdistmean/df.segmean))
-    figs['meanpathcvvsareasdiventr'].update_layout(
-            title="Entropy of areas vs. logarithm of the coefficient of variation of the normalized shortest path length (Pearson: {:.2f})".\
-                    format(entropycvlogpearson[0]),
-            xaxis_title="Entropy of block area",
-            yaxis_title="Logarithm of the coefficient of variation of the normalized shortest path length",
-            # yaxis_type='log',
-            )
-
-    for _, row in df.iterrows():
-         figs['meanpathvsdegrentr'].add_trace(go.Scatter(
-            x=[row.degreeentropy],
-            y=[row.wdistmean/row.segmean],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df.degreeentropy, np.log(df.wdistmean/df.segmean))
-    figs['meanpathvsdegrentr'].update_layout(
-            title="Entropy of degrees vs. mean path length norm. by mean segment length (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Entropy of degrees",
-            yaxis_title="Mean path length (normalized by mean segment length)",
-            yaxis_type="log"
-            )
-
-    
-    for _, row in df.iterrows():
-         figs['meanpathvsareaevenness'].add_trace(go.Scatter(
-            x=[row.areaeveness],
-            y=[np.log(row.wdistmean)],
-            mode='markers', marker_size=10, name=row.city,))
-    entropylogpearson = pearsonr(df.areaeveness, np.log(df.wdistmean))
-    figs['meanpathvsareaevenness'].update_layout(
-            title="Logarithm of the average path length vs. evenness of block areas (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Evenness of block areas",
-            yaxis_title="Logarithm of the average path length",
-            # yaxis_type="log"
-            )
-
-    # print(np.log(df.wdiststd/df.wdistmean))
-    # for _, row in df.iterrows():
-         # figs['meanpathcvvsareaevenness'].add_trace(go.Scatter(
-            # x=[row.areaeveness],
-            # y=[np.log(df.wdiststd/df.wdistmean)],
-            # mode='markers', marker_size=10, name=row.city,))
-
-    # figs['meanpathcvvsareaevenness'].add_trace(go.Scatter(
-        # x=[row.areaeveness],
-        # y=[np.log(df.wdiststd/df.wdistmean)],
-        # mode='markers', marker_size=10, name=row.city,))
-
-    entropylogpearson = pearsonr(df.areaeveness, np.log(df.wdiststd/df.wdistmean))
-
-    figs['meanpathcvvsareaevenness'].add_trace(go.Scatter(
-        x=[df.areaeveness],
-        y=[np.log(df.wdiststd/df.wdistmean)],
-        mode='markers', marker_size=10,
-        line=go.scatter.Line(color="gray"),
-    ))
-
-    figs['meanpathcvvsareaevenness'].update_layout(
-            title="Logarithm of the coefficient of variation of the average path length vs. evenness of block areas (Pearson: {:.2f})".\
-                    format(entropylogpearson[0]),
-            xaxis_title="Evenness of block areas",
-            yaxis_title="Logarithm of the coefficient of variation of the average path length",
-            )
-
-    print('foo')
-
-    df2 = df.copy()
-    import plotly.express as px
-    df2['x'] = df.areaeveness
-    df2['y'] = np.log(df.wdiststd/df.wdistmean)
-    fig = px.scatter(df2, x='x', y='y', trendline="ols")
-    # fig.show()
-    plotly.offline.plot(fig,
-                        filename='/tmp/foo.html',
-                        auto_open=False)
-
-    figs['entropyhist'].add_trace(
-            go.Histogram(x=df.areadiventropy,
-                histnorm='probability',
-                ))
-    figs['entropyhist'].update_layout(
-            title="Entropy of block area",
-            xaxis_title="Entropy",
-            yaxis_title="Relative frequency",
-            )
-
-    figs['areaevennesshist'].add_trace(
-            go.Histogram(x=df.areaeveness,
-                histnorm='probability',
-                ))
-    figs['areaevennesshist'].update_layout(
-            title="Evenness of block areas",
-            xaxis_title="Evenness of block areas",
-            yaxis_title="Relative frequency",
-            )
-    ########################################################## Save to file
-    for k in figs.keys():
-        plotly.offline.plot(figs[k],
-                            filename=pjoin(outdir, k + '.html'),
-                            auto_open=False)
-
-##########################################################
-def plot_distributions2(outdir):
+def plot_distributions(outdir):
     """Plot distributions for each array of areas
 
     Args:
@@ -1044,8 +741,7 @@ def main():
     areas = calculate_block_areas(components, args.outdir)
     compute_statistics(weightdir, areas, blockminarea, args.outdir)
     return
-    # plot_distributions(args.outdir, lonlatranges)
-    # plot_distributions2(args.outdir)
+    # plot_distributions(args.outdir)
 
     # areasentropy = compute_areas_entropy(args.outdir)
     # print(list(areasentropy))
