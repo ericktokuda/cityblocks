@@ -110,6 +110,7 @@ def colorize_by_size(labels):
 def compute_raster_real_conversion(rasterranges, lonlatranges):
     conversionfactors = {}
     for k, c in lonlatranges.items():
+        if k == '0662602_Rolling_Hills': continue 
         realbboxcoords = np.array([[c[0], c[1]], [c[0], c[3]],
                                    [c[2], c[3]], [c[2], c[1]], ])
         real = calculate_real_area(realbboxcoords)
@@ -126,6 +127,7 @@ def calculate_raster_areas(labels, outdir): # It contains both the skeleton and 
     skelranges = {}
     for k, label in labels.items():
         info(' *' + k)
+        if k == '0662602_Rolling_Hills': continue #TODO: fix this
         _, areas = np.unique(label, return_counts=True)
         allareas[k] = np.array(areas) # Eliminate skeleton and external part later
         skelids = np.where(label == 0) # skeleton (cv2)
@@ -448,6 +450,7 @@ def generate_components_vis(components, compdir):
 
     for k, labels in components.items():
         info(' *' + k)
+        if k == '0662602_Rolling_Hills': continue #TODO: fix this
         # labeled_img = colorize_random(labels)
         labeled_img = colorize_by_size(labels)
         outpath = pjoin(compdir, k + '_labels.png')
