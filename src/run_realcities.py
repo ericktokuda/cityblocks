@@ -306,7 +306,7 @@ def parse_graphml(graphsdir, weightdir):
 
     for filepath in os.listdir(graphsdir):
         outpath = pjoin(weightdir, filepath.replace('.graphml', '.pkl'))
-        if not filepath.endswith('.graphml') or if os.path.exists(outpath): continue
+        if not filepath.endswith('.graphml') or os.path.exists(outpath): continue
 
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
