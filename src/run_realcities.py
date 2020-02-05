@@ -24,7 +24,6 @@ from haversine import haversine
 from scipy import stats
 from scipy.stats.stats import pearsonr
 from itertools import groupby
-import matplotlib.pyplot as plt
 
 MAX = 999999999
 
@@ -257,6 +256,9 @@ def generate_lattice(ncols, nrows, thoroidal=False, s=10):
 
 ##########################################################
 def generate_test_graphs(graphsdir, outdir):
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
     nvertices, nedges, mins, maxs, refcity = get_ref_params(graphsdir)
     range_ = (maxs - mins)
 
@@ -1003,6 +1005,7 @@ def plot_distributions2(outdir):
 
 ##########################################################
 def plot_areas_distrib(areaspath, outdir):
+    import matplotlib.pyplot as plt
     areas = pkl.load(open(areaspath, 'rb'))
     for k, v in areas.items():
         a = v[2:] # Ignore skeleton and outer part
@@ -1027,6 +1030,7 @@ def main():
     compdir = pjoin(args.outdir, 'comp/')
     weightdir = pjoin(args.outdir, 'weighted/')
 
+    np.random.seed(0)
     figscale = 20000
     blockminarea = 0.0004
 
