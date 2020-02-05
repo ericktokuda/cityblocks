@@ -300,15 +300,14 @@ def add_weights_to_edges(g):
 
 #############################################################
 def parse_graphml(graphsdir, weightdir):
-    if os.path.exists(weightdir):
-        info('{} already exists. Skipping ...'.format(weightdir))
-        return
-    os.makedirs(weightdir)
+    if not os.path.exists(weightdir):
+        # info('{} already exists. Skipping ...'.format(weightdir))
+        os.makedirs(weightdir)
 
     for filepath in os.listdir(graphsdir):
-        if not filepath.endswith('.graphml'): continue
-
         outpath = pjoin(weightdir, filepath.replace('.graphml', '.pkl'))
+        if not filepath.endswith('.graphml') or if os.path.exists(outpath): continue
+
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
         g = g.components(mode='weak').giant()
@@ -432,17 +431,14 @@ def get_components_from_raster(rasterdir, outdir):
 
 ##########################################################
 def generate_components_vis(components, compdir):
-    if os.path.exists(compdir):
-        info('{} already exists. Skipping ...'.format(compdir))
-        return
-
     info('Generating components visualization ...')
-    os.makedirs(compdir)
+    if not os.path.exists(compdir):
+        os.makedirs(compdir)
 
     for k, labels in components.items():
         info(' *' + k)
-        if k == '0662602_Rolling_Hills': continue #TODO: fix this
         outpath = pjoin(compdir, k + '_labels.png')
+        if k == '0662602_Rolling_Hills': continue #TODO: fix this
         if os.path.exists(outpath): continue
         # labeled_img = colorize_random(labels)
         labeled_img = colorize_by_size(labels)
@@ -486,8 +482,7 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
         'areamean,areastd,areacv,areamin,areamax,areasentropy0001,' \
         'areasentropy001,areasentropy01,areasentropy1,areasentropy10,' \
         'areadiventropy,areaeveness,segmean,segstd,udistmean,udiststd,' \
-        'wdistmean,wdiststd,'\
-        'betwvmean,betwvstd'
+        'wdistmean,wdiststd,betwvmean,betwvstd'
 
     df = pd.DataFrame(columns=header.split(','),
                           index=blockareas.keys())
