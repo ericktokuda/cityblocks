@@ -24,6 +24,7 @@ from haversine import haversine
 from scipy import stats
 from scipy.stats.stats import pearsonr
 from itertools import groupby
+import matplotlib.pyplot as plt
 
 MAX = 999999999
 
@@ -282,6 +283,7 @@ def generate_test_graphs(graphsdir, outdir):
     nedges = g.ecount()
     aux = np.random.rand(int(nedges*delratio))*nedges
     g.delete_edges(aux.astype(int))
+    g = g.components(mode='weak').giant()
     g = add_weights_to_edges(g)
     outfilename = pjoin(outdir, 'lattice_{}.pkl'.format(int(delratio*100)))
     pkl.dump(g, open(outfilename, 'wb'))
@@ -995,6 +997,19 @@ def plot_distributions2(outdir):
         plotly.offline.plot(figs[k],
                             filename=pjoin(outdir, k + '.html'),
                             auto_open=False)
+
+##########################################################
+def plot_areas_distrib(areaspath, outdir):
+    areas = pkl.load(open(areaspath, 'rb'))
+    for k, v in areas.items():
+        a = v[2:] # Ignore skeleton and outer part
+        bins = np.arange(np.min(a), np.max(a)+0.1, 0.01)
+        plt.clf()
+        plt.hist(np.around(a, decimals=3), bins=bins)
+        plt.title('Histogram for {}'.format(k))
+        plt.xlabel('Block area')
+        plt.savefig(pjoin(outdir, k + '.png'))
+
 ##########################################################
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1012,6 +1027,7 @@ def main():
     figscale = 20000
     blockminarea = 0.0004
 
+    # plot_areas_distrib('/tmp/20200203-CAdataverse_sample/areas.pkl', '/tmp/')
     parse_graphml(args.graphsdir, weightdir)
     generate_test_graphs(args.graphsdir, weightdir)
     get_maps_ranges(weightdir, args.outdir)
