@@ -26,8 +26,8 @@ from scipy.stats.stats import pearsonr
 from itertools import groupby
 
 MAX = 999999999
-VMIN = 5
-EMIN = 5
+VMIN = 10
+EMIN = 10
 
 ##########################################################
 def xnet2igraph_batch(xnetdir):
@@ -61,6 +61,7 @@ def polyarea(x,y):
 def calculate_real_area(coords, unit='km'):
     # https://gis.stackexchange.com/questions/127607/area-in-km-from-polygon-of-coordinates
     # Older pyproj versions require lat1, lat2, instead of lat_1, lat_2
+
     try:
     # if True:
         geom = Polygon(coords)
