@@ -26,6 +26,8 @@ from scipy.stats.stats import pearsonr
 from itertools import groupby
 
 MAX = 999999999
+VMIN = 5
+EMIN = 5
 
 ##########################################################
 def xnet2igraph_batch(xnetdir):
@@ -39,7 +41,7 @@ def xnet2igraph_batch(xnetdir):
     outdir = '/tmp/'
     xnetdir = '/tmp/'
     acc = 0
-    for xnetgraphpath in os.listdir(xnetdir):
+    for xnetgraphpath in sorted(os.listdir(xnetdir)):
         if not xnetgraphpath.endswith('.xnet'): continue
         g = xnet.xnet2igraph(pjoin(xnetdir, xnetgraphpath))
         g.vs['x'] = g.vs['posx']
@@ -58,7 +60,9 @@ def polyarea(x,y):
 ##########################################################
 def calculate_real_area(coords, unit='km'):
     # https://gis.stackexchange.com/questions/127607/area-in-km-from-polygon-of-coordinates
+    # Older pyproj versions require lat1, lat2, instead of lat_1, lat_2
     try:
+    # if True:
         geom = Polygon(coords)
         geom_area = ops.transform(
             partial(
@@ -66,8 +70,8 @@ def calculate_real_area(coords, unit='km'):
                 pyproj.Proj(init='EPSG:4326'),
                 pyproj.Proj(
                     proj='aea',
-                    lat1=geom.bounds[1],
-                    lat2=geom.bounds[3])),
+                    lat_1=geom.bounds[1],
+                    lat_2=geom.bounds[3])),
             geom)
         if unit == 'km': factor = 1000000
         else: factor = 1
@@ -107,15 +111,25 @@ def colorize_by_size(labels):
 
 ##########################################################
 def compute_raster_real_conversion(rasterranges, lonlatranges):
+    info('Converting areas (raster->real)')
     conversionfactors = {}
+    errors = []
     for k, c in lonlatranges.items():
-        if k == '0662602_Rolling_Hills': continue 
-        realbboxcoords = np.array([[c[0], c[1]], [c[0], c[3]],
-                                   [c[2], c[3]], [c[2], c[1]], ])
-        real = calculate_real_area(realbboxcoords)
-        r = rasterranges[k]
-        raster = (r[2] - r[0]) * (r[3] - r[1])
-        conversionfactors[k] = real / raster
+        try:
+        # if True:
+            realbboxcoords = np.array([[c[0], c[1]], [c[0], c[3]],
+                                       [c[2], c[3]], [c[2], c[1]], ])
+            real = calculate_real_area(realbboxcoords)
+
+            if real < 0: raise Exception('Error when computing area')
+
+            r = rasterranges[k]
+            raster = (r[2] - r[0]) * (r[3] - r[1])
+            conversionfactors[k] = real / raster
+        except:
+            errors.append(k)
+
+    info('Errors: {}'.format(errors))
     return conversionfactors
 
 ##########################################################
@@ -126,7 +140,6 @@ def calculate_raster_areas(labels, outdir): # It contains both the skeleton and 
     skelranges = {}
     for k, label in labels.items():
         info(' *' + k)
-        if k == '0662602_Rolling_Hills': continue #TODO: fix this
         _, areas = np.unique(label, return_counts=True)
         allareas[k] = np.array(areas) # Eliminate skeleton and external part later
         skelids = np.where(label == 0) # skeleton (cv2)
@@ -163,7 +176,7 @@ def compute_areas_entropy(outdir):
 
 #############################################################
 def get_ref_params(graphsdir):
-    for filepath in os.listdir(graphsdir):
+    for filepath in sorted(os.listdir(graphsdir)):
         if not filepath.endswith('.graphml'): continue
 
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
@@ -304,13 +317,18 @@ def parse_graphml(graphsdir, weightdir):
         # info('{} already exists. Skipping ...'.format(weightdir))
         os.makedirs(weightdir)
 
-    for filepath in os.listdir(graphsdir):
+    errors = []
+    for filepath in sorted(os.listdir(graphsdir)):
         outpath = pjoin(weightdir, filepath.replace('.graphml', '.pkl'))
         if not filepath.endswith('.graphml') or os.path.exists(outpath): continue
 
         info(' *' + filepath)
         g = igraph.Graph.Read(pjoin(graphsdir, filepath))
         g = g.components(mode='weak').giant()
+
+        if g.vcount() < VMIN or g.ecount() < EMIN:
+            errors.append(filepath)
+            continue
 
         if 'x' in g.vs.attributes():
             g.vs['x'] = np.array(g.vs['x']).astype(float)
@@ -325,6 +343,7 @@ def parse_graphml(graphsdir, weightdir):
         g = add_weights_to_edges(g)
 
         pkl.dump(g, open(outpath, 'wb'))
+    info('Errors: {}'.format(errors))
 
 ##########################################################
 def get_maps_ranges(graphsdir, outdir):
@@ -336,7 +355,7 @@ def get_maps_ranges(graphsdir, outdir):
 
     info('Getting map ranges ...')
     ranges = {}
-    for filepath in os.listdir(graphsdir):
+    for filepath in sorted(os.listdir(graphsdir)):
         k = os.path.splitext(filepath)[0]
         if not filepath.endswith('.pkl'): continue
         # g = igraph.Graph.Read(pjoin(graphsdir, filepath))
@@ -355,53 +374,60 @@ def plot_graph_raster(graphsdir, skeldir, figscale=20000):
         os.makedirs(skeldir)
 
     info('Reading graphs from {} ...'.format(graphsdir))
+    errors = []
     allareas = {}
-    for filepath in os.listdir(graphsdir):
+
+    for filepath in sorted(os.listdir(graphsdir)):
         info(' *' + filepath)
-        outpath = pjoin(skeldir, os.path.splitext(filepath)[0] + '.png')
-        if not filepath.endswith('.pkl') or os.path.exists(outpath): continue
-        g = pkl.load(open(pjoin(graphsdir, filepath), 'rb'))
-        for ed in g.es():
-            if 'geometry' not in ed.attributes(): continue # split lines
-            if ed['geometry'] == None or ed['geometry'] == '': continue
+        try:
+            outpath = pjoin(skeldir, os.path.splitext(filepath)[0] + '.png')
+            if not filepath.endswith('.pkl') or os.path.exists(outpath): continue
+            g = pkl.load(open(pjoin(graphsdir, filepath), 'rb'))
+            for ed in g.es():
+                if 'geometry' not in ed.attributes(): continue # split lines
+                if ed['geometry'] == None or ed['geometry'] == '': continue
 
-            y = ed['geometry'].split('(')[1][:-1].split(', ')
-            artnodes = []
-            nartnodes = len(y)
-            nnodes = len(g.vs)
+                y = ed['geometry'].split('(')[1][:-1].split(', ')
+                artnodes = []
+                nartnodes = len(y)
+                nnodes = len(g.vs)
 
-            for j in range(nartnodes):
-                aux = y[j].split(' ')
-                g.add_vertex(nnodes + j, x=float(aux[0]), y=float(aux[1]))
+                for j in range(nartnodes):
+                    aux = y[j].split(' ')
+                    g.add_vertex(nnodes + j, x=float(aux[0]), y=float(aux[1]))
 
-            g.add_edge(g.vs[ed.source], g.vs[nnodes]) #source->first
-            for j in range(1, nartnodes): #internal nodes
-                g.add_edge(g.vs[nnodes+j-1], g.vs[nnodes+j])
-            g.add_edge(g.vs[nnodes+nartnodes-1], g.vs[ed.target]) #internal->target
-            g.delete_edges((ed.source, ed.target))
+                g.add_edge(g.vs[ed.source], g.vs[nnodes]) #source->first
+                for j in range(1, nartnodes): #internal nodes
+                    g.add_edge(g.vs[nnodes+j-1], g.vs[nnodes+j])
+                g.add_edge(g.vs[nnodes+nartnodes-1], g.vs[ed.target]) #internal->target
+                g.delete_edges((ed.source, ed.target))
 
-        g.to_undirected()
-        lonrange = [np.min(g.vs['x']), np.max(g.vs['x'])]
-        latrange = [np.min(g.vs['y']), np.max(g.vs['y'])]
+            g.to_undirected()
+            lonrange = [np.min(g.vs['x']), np.max(g.vs['x'])]
+            latrange = [np.min(g.vs['y']), np.max(g.vs['y'])]
 
-        lonfigsize = (lonrange[1] - lonrange[0])*figscale
-        latfigsize = (latrange[1] - latrange[0])*figscale
+            lonfigsize = (lonrange[1] - lonrange[0])*figscale
+            latfigsize = (latrange[1] - latrange[0])*figscale
 
-        COL='#000000'
-        # COL='#4e7f80'
-        visual = dict(
-            vertex_size = 0,
-            # vertex_size = 5,
-            vertex_frame_width = 0,
-            vertex_color = COL,
-            edge_color = COL,
-            edge_width = 2,
-            bbox = (lonfigsize, latfigsize)
-        )
+            COL='#000000'
+            # COL='#4e7f80'
+            visual = dict(
+                vertex_size = 0,
+                # vertex_size = 5,
+                vertex_frame_width = 0,
+                vertex_color = COL,
+                edge_color = COL,
+                edge_width = 2,
+                bbox = (lonfigsize, latfigsize)
+            )
 
-        layout = [ (x, -y) for x, y in zip(g.vs['x'], g.vs['y']) ]
+            layout = [ (x, -y) for x, y in zip(g.vs['x'], g.vs['y']) ]
 
-        igraph.plot(g, target=outpath, layout=layout, **visual)
+            igraph.plot(g, target=outpath, layout=layout, **visual)
+        except:
+            errors.append(k)
+
+    info('Errors: {}'.format(errors))
 
 ##########################################################
 def get_components_from_raster(rasterdir, outdir):
@@ -414,7 +440,7 @@ def get_components_from_raster(rasterdir, outdir):
     info('Reading raster graphics from {} ...'.format(rasterdir))
     components = {}
 
-    for filepath in os.listdir(rasterdir):
+    for filepath in sorted(os.listdir(rasterdir)):
         if not filepath.endswith('.png'): continue
         info(' *' + filepath)
         imgpath = pjoin(rasterdir, filepath)
@@ -492,7 +518,6 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
         # if True:
         try:
             filepath = pjoin(graphsdir, k + '.pkl')
-            # g = igraph.Graph.Read(filepath)
             g = pkl.load(open(filepath, 'rb'))
 
             nvertices = g.vcount()
@@ -540,6 +565,7 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
 
             ########################################################## block areas
             areas = blockareas[k][2:] # 0: skeleton, 1: background
+            print(areas)
             nblocksall = len(areas)
             validind = areas >= blockminarea
             nblocksvalid = np.sum(validind)
@@ -585,8 +611,7 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
     for col in df.columns:
         if col == 'city': continue
         info('{}:\t{:.3f} ({:.3f})'.format(col, np.mean(df[col]), np.std(df[col])))
-    info('Errors:')
-    info(errors)
+    info('Errors: {}'.format(errors))
 
 ##########################################################
 def plot_distributions(outdir):
