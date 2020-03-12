@@ -566,7 +566,6 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
 
             ########################################################## block areas
             areas = blockareas[k][2:] # 0: skeleton, 1: background
-            print(areas)
             nblocksall = len(areas)
             validind = areas >= blockminarea
             nblocksvalid = np.sum(validind)
