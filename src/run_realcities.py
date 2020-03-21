@@ -508,7 +508,7 @@ def compute_statistics(graphsdir, blockareas, blockminarea, outdir):
         'nblocksall,nblocksvalid,areasum,' \
         'areamean,areastd,areacv,areamin,areamax,areasentropy0001,' \
         'areasentropy001,areasentropy01,areasentropy1,areasentropy10,' \
-        'areadiventropy,areaeveness,segmean,segstd,udistmean,udiststd,' \
+        'areadiventropy,areaevenness,segmean,segstd,udistmean,udiststd,' \
         'wdistmean,wdiststd,betwvmean,betwvstd'
 
     df = pd.DataFrame(columns=header.split(','),
