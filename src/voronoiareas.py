@@ -199,12 +199,27 @@ def plot_boxed_voronoi(ax, vor, b):
 def compute_cells_bounded_by_polygon(cells, mappoly):
     polys = []
     for c in cells:
-        print('c:{}'.format(c))
+        # print('c:{}'.format(c))
+        # print('type(c):{}'.format(type(c)))
+        # input()
         poly = geometry.Polygon(c)
         polygon1 = poly.intersection(mappoly)
         polys.append(polygon1)
     return polys
 
+##########################################################
+def get_region_polys(vor):
+    polys = []
+    vs = vor.vertices
+    for i, r in enumerate(vor.regions):
+        if len(r) == 0: continue
+        if -1 in r: continue # discard voronoi ridges
+        coords = vs[r]
+        poly = geometry.Polygon(coords)
+        polys.append(poly)
+    return polys
+
+##########################################################
 def plot_polygon(ax, pol, c):
     x,y = pol.exterior.xy
     z = list(zip(*pol.exterior.coords.xy))
@@ -276,22 +291,28 @@ def main():
 
     vor = spatial.Voronoi(points) # Compute regular Voronoi
 
-    spatial.voronoi_plot_2d(vor, ax=axs[0, 0]) # Plot default unbounded voronoi
-
-    cells = plot_boxed_voronoi(axs[0, 1], vor, bbox)
-    polys = compute_cells_bounded_by_polygon(cells, mappoly)
-    plot_bounded_cells(axs[0, 2], polys)
+    polys = get_region_polys(vor)
+    # plot_bounded_cells(axs[0, 2], polys)
     areas = [p.area for p in polys]
-    centroids = np.array([np.array(p.centroid.coords)[0] for p in polys])
-    orderedcentroids = centroids[vor.point_region-1] # Sort the region ids
-    centroidsdists = scipy.spatial.distance.cdist(centroids, points).diagonal()
+    # centroids = np.array([np.array(p.centroid.coords)[0] for p in polys])
+    # orderedcentroids = centroids[vor.point_region-1] # Sort the region ids
+    # centroidsdists = scipy.spatial.distance.cdist(centroids, points).diagonal()
     #TODO: adjust above computation for the multiple polygons case
+
+    # from scipy import spatial
+    # points = np.array([[-1, -1], [+1, -1], [-.5, +.5], [+.5, +.5]])
+    # vor = spatial.Voronoi(points)
+
+
     areasmean = np.mean(areas)
     areasstd = np.std(areas)
     info('datamean:{}'.format(np.mean(points, 0)))
     info('areascv:{}'.format(areasstd/areasmean))
     df = pd.DataFrame({'areasmean':areasmean, 'areasstd':areasstd,
                        'centroidsdists':centroidsdists})
+
+    # z = np.argwhere(np.all(arr == querypoint, axis=1))[0]
+
     df.to_csv(pjoin(args.outdir, 'voronoi.csv'), header=True, index=False)
 
     plt.savefig(pjoin(args.outdir, 'voronoi.pdf'))
