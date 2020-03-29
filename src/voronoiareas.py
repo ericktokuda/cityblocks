@@ -24,6 +24,7 @@ from scipy.spatial import KDTree
 import itertools
 # import os
 from os.path import join as pjoin
+import igraph
 
 
 ##########################################################
@@ -239,6 +240,30 @@ def random_sign(sampleshape):
     return (np.random.rand(*sampleshape) > .5).astype(int)*2 - 1
     # return np.random.choice([-1, 1], size=samplesz, replace=True)
 
+##########################################################
+def create_graph_from_voronoi(vor):
+    n = len(vor.vertices)
+    nmaxedges = int(n * (n -1) / 2)
+    es = np.zeros((nmaxedges, 2), dtype=int)
+
+    j = 0
+    for r in vor.regions:
+        if len(r) == 0 or -1 in r: continue
+        nn = len(r)
+
+        for i in range(nn):
+            es[j, :] = [r[i], r[(i+1) % nn]]
+            j += 1
+
+    es = list(es[:j, :])
+    vattrs = dict(
+        x = vor.vertices[:, 0],
+        y = vor.vertices[:, 1]
+    )
+    return igraph.Graph(n, edges=es, directed=False,
+                        vertex_attrs=vattrs)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--distrib', default='uniform', help='data distrib')
@@ -290,9 +315,12 @@ def main():
         return
 
     vor = spatial.Voronoi(points) # Compute regular Voronoi
+    g = create_graph_from_voronoi(vor)
+    igraph.plot(g, '/tmp/out.pdf')
 
     polys = get_region_polys(vor)
-    # plot_bounded_cells(axs[0, 2], polys)
+    plot_bounded_cells(axs[0, 2], polys)
+    # return
     areas = [p.area for p in polys]
     # centroids = np.array([np.array(p.centroid.coords)[0] for p in polys])
     # orderedcentroids = centroids[vor.point_region-1] # Sort the region ids
@@ -308,12 +336,12 @@ def main():
     areasstd = np.std(areas)
     info('datamean:{}'.format(np.mean(points, 0)))
     info('areascv:{}'.format(areasstd/areasmean))
-    df = pd.DataFrame({'areasmean':areasmean, 'areasstd':areasstd,
-                       'centroidsdists':centroidsdists})
+    # df = pd.DataFrame({'areasmean':areasmean, 'areasstd':areasstd,
+                       # 'centroidsdists':centroidsdists})
 
     # z = np.argwhere(np.all(arr == querypoint, axis=1))[0]
 
-    df.to_csv(pjoin(args.outdir, 'voronoi.csv'), header=True, index=False)
+    # df.to_csv(pjoin(args.outdir, 'voronoi.csv'), header=True, index=False)
 
     plt.savefig(pjoin(args.outdir, 'voronoi.pdf'))
 
