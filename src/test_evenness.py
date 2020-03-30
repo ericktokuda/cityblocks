@@ -34,11 +34,11 @@ def main():
 
     figsz = 5
     fig, axs = plt.subplots(1, 2, figsize=(2*figsz, 1*figsz))
-    epsilon = .01
+    epsilon = .001
 
     for i, k in enumerate(data.keys()):
         d = data[k]
-        p = normalize_0_1(d) + epsilon
+        p = d / np.sum(d)
         # print(p)
         diventropy = -np.sum(p * np.log(p)) + epsilon
         evenness = np.exp(diventropy) / len(p)
