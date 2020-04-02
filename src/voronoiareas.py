@@ -200,24 +200,31 @@ def plot_boxed_voronoi(ax, vor, b):
 def compute_cells_bounded_by_polygon(cells, mappoly):
     polys = []
     for c in cells:
-        # print('c:{}'.format(c))
-        # print('type(c):{}'.format(type(c)))
-        # input()
         poly = geometry.Polygon(c)
         polygon1 = poly.intersection(mappoly)
         polys.append(polygon1)
     return polys
 
 ##########################################################
-def get_region_polys(vor):
-    polys = []
+def get_external_vertices(vor):
     vs = vor.vertices
+    indsoutside = set(np.where((vs < 0) | (vs > 1))[0])
+    indsoutside.add(-1)
+    return indsoutside
+
+def get_voronoi_bounded_polys(vor, exclude=set()):
+    polys = []
+    polysinf = []
+    vs = vor.vertices
+
     for i, r in enumerate(vor.regions):
-        if len(r) == 0: continue
-        if -1 in r: continue # discard voronoi ridges
+        if len(r) == 0 or len(exclude.intersection(set(r))) > 0:
+            continue
+
         coords = vs[r]
         poly = geometry.Polygon(coords)
         polys.append(poly)
+
     return polys
 
 ##########################################################
@@ -241,27 +248,44 @@ def random_sign(sampleshape):
     # return np.random.choice([-1, 1], size=samplesz, replace=True)
 
 ##########################################################
-def create_graph_from_voronoi(vor):
+def create_graph_from_voronoi(vor, exclude=set()):
     n = len(vor.vertices)
     nmaxedges = int(n * (n -1) / 2)
     es = np.zeros((nmaxedges, 2), dtype=int)
 
     j = 0
     for r in vor.regions:
-        if len(r) == 0 or -1 in r: continue
-        nn = len(r)
+        if len(r) == 0 or len(exclude.intersection(set(r))) > 0:
+            continue
 
-        for i in range(nn):
-            es[j, :] = [r[i], r[(i+1) % nn]]
+        m = len(r)
+
+        for i in range(m):
+            es[j, :] = [r[i], r[(i+1) % m]]
             j += 1
 
     es = list(es[:j, :])
+    xs = vor.vertices[:, 0]
+    ys = vor.vertices[:, 1]
+
+    valid = np.ones(xs.shape, dtype=bool)
+    invalid = list(exclude)
+    if -1 in invalid: invalid.remove(-1)
+    valid[invalid] = False
+
     vattrs = dict(
-        x = vor.vertices[:, 0],
-        y = vor.vertices[:, 1]
+        x = xs[valid],
+        y = ys[valid],
     )
-    return igraph.Graph(n, edges=es, directed=False,
-                        vertex_attrs=vattrs)
+    breakpoint()
+    g = igraph.Graph(n, edges=es, directed=False, vertex_attrs=vattrs)
+    g.simplify()
+    g = g.components().giant()
+
+    print('g.vcount:{}'.format(g.vcount()))
+    print('g.ecount:{}'.format(g.ecount()))
+    coords = [[x,-y] for x,y in zip(g.vs['x'], g.vs['y'])]
+    return g, coords
 
 
 def main():
@@ -269,10 +293,13 @@ def main():
     parser.add_argument('--distrib', default='uniform', help='data distrib')
     parser.add_argument('--samplesz', default=50, type=int, help='sample size')
     parser.add_argument('--outdir', required=False, default='/tmp/', help='POIs in csv fmt')
+    parser.add_argument('--seed', type=int)
     args = parser.parse_args()
 
     logging.basicConfig(format='[%(asctime)s] %(message)s',
     datefmt='%Y%m%d %H:%M', level=logging.INFO)
+
+    np.random.seed(args.seed)
 
     nrows = 1;  ncols = 3
     figscale = 5
@@ -315,27 +342,30 @@ def main():
         return
 
     vor = spatial.Voronoi(points) # Compute regular Voronoi
-    g = create_graph_from_voronoi(vor)
-    igraph.plot(g, '/tmp/out.pdf')
 
-    polys = get_region_polys(vor)
-    plot_bounded_cells(axs[0, 2], polys)
-    # return
-    areas = [p.area for p in polys]
-    # centroids = np.array([np.array(p.centroid.coords)[0] for p in polys])
-    # orderedcentroids = centroids[vor.point_region-1] # Sort the region ids
-    # centroidsdists = scipy.spatial.distance.cdist(centroids, points).diagonal()
-    #TODO: adjust above computation for the multiple polygons case
+    extvert = get_external_vertices(vor)
+    polys = get_voronoi_bounded_polys(vor, exclude=extvert)
+    print(len(polys))
 
-    # from scipy import spatial
-    # points = np.array([[-1, -1], [+1, -1], [-.5, +.5], [+.5, +.5]])
+    # extvert = set([-1])
+    # points = np.array([[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2],
+                       # [2, 0], [2, 1], [2, 2]])
     # vor = spatial.Voronoi(points)
 
+    g, coords = create_graph_from_voronoi(vor, exclude=extvert)
+    igraph.plot(g, '/tmp/out.pdf', layout=coords, autocurve=False,
+                # vertex_size
+                )
+    # return
+
+    spatial.voronoi_plot_2d(vor, ax=axs[0, 1])
+    plot_bounded_cells(axs[0, 2], polys)
+    areas = [p.area for p in polys]
 
     areasmean = np.mean(areas)
     areasstd = np.std(areas)
-    info('datamean:{}'.format(np.mean(points, 0)))
-    info('areascv:{}'.format(areasstd/areasmean))
+    # info('datamean:{}'.format(np.mean(points, 0)))
+    info('{:.3f}, {:.3f}, {:.3f}'.format(areasmean, areasstd, areasstd/areasmean))
     # df = pd.DataFrame({'areasmean':areasmean, 'areasstd':areasstd,
                        # 'centroidsdists':centroidsdists})
 
