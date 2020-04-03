@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-""" Compute the voronoi diagram provided the points
+""" Compute the voronoi diagram provided the map and seeds
 """
 
 import argparse
@@ -76,7 +76,7 @@ def get_crossing_point_rectangle(v0, alpha, orient, encbox):
 ##########################################################
 def get_boxed_polygons(vor, newvorvertices, newridgevertices, encbox):
     newvorregions = copy.deepcopy(vor.regions)
-    newvorregions = np.array([ np.array(f) for f in newvorregions])
+    # newvorregions = np.array([ np.array(f) for f in newvorregions])
 
     # Update voronoi regions to include added vertices and corners
     for regidx, rr in enumerate(vor.regions):
@@ -94,11 +94,7 @@ def get_boxed_polygons(vor, newvorvertices, newridgevertices, encbox):
             myidx = 0 if ridgevs[0] == -1 else 1
 
             newvorregions[regidx].append(newridgevertices[ridgeid][myidx])
-        if -1 in newvorregions[regidx]:
-            newvorregions[regidx].remove(-1)
-
-    for i in range(newvorregions.shape[0]):
-        newvorregions[i] = list(newvorregions[i])
+        if -1 in newvorregions[regidx]:  newvorregions[regidx].remove(-1)
 
     tree = KDTree(vor.points)
     corners = itertools.product((encbox[0], encbox[2]), (encbox[1], encbox[3]))
@@ -192,7 +188,6 @@ def plot_boxed_voronoi(ax, vor, b):
     ax.add_patch(patches.Rectangle(b[0:2], b[2]-b[0], b[3]-b[1],
                                    linewidth=1, edgecolor='r', facecolor='none'))
     cells = get_boxed_polygons(vor, newvorvertices, newridgevertices, b)
-    print(cells)
 
     plot_bounded_ridges(ax, cells)
     return cells
@@ -206,39 +201,11 @@ def compute_cells_bounded_by_polygon(cells, mappoly):
         polys.append(polygon1)
     return polys
 
-##########################################################
-def get_external_vertices(vor):
-    vs = vor.vertices
-    indsoutside = set(np.where((vs < 0) | (vs > 1))[0])
-    indsoutside.add(-1)
-    return indsoutside
-
-##########################################################
-def get_voronoi_bounded_polys(vor, exclude=set()):
-    polys = []
-    polysinf = []
-    vs = vor.vertices
-
-    info('exclude:{}'.format(exclude))
-
-    for i, r in enumerate(vor.regions):
-        print(i, r)
-        if len(r) == 0 or len(exclude.intersection(set(r))) > 0:
-            continue
-
-        coords = vs[r]
-        poly = geometry.Polygon(coords)
-        polys.append(poly)
-
-    return polys
-
-##########################################################
 def plot_polygon(ax, pol, c):
     x,y = pol.exterior.xy
     z = list(zip(*pol.exterior.coords.xy))
-    ax.add_patch(patches.Polygon(z, linewidth=1, edgecolor='r',
+    ax.add_patch(patches.Polygon(z, linewidth=2, edgecolor='r',
                                      facecolor=c))
-##########################################################
 def plot_bounded_cells(ax, polys):
     for pol in polys:
         if pol.geom_type == 'MultiPolygon':
@@ -248,58 +215,61 @@ def plot_bounded_cells(ax, polys):
             plot_polygon(ax, pol, np.random.rand(3,))
 
     ax.autoscale_view()
+
 ##########################################################
 def random_sign(sampleshape):
     return (np.random.rand(*sampleshape) > .5).astype(int)*2 - 1
-    # return np.random.choice([-1, 1], size=samplesz, replace=True)
 
 ##########################################################
-def create_graph_from_voronoi(vor, exclude=set()):
-    n = len(vor.vertices)
-    nmaxedges = int(n * (n -1) / 2)
-    es = np.zeros((nmaxedges, 2), dtype=int)
+def create_graph_from_polys(polys):
+    coords = set()
 
-    # 1- update the vertex ids accordings to the list exclude
-    # 2- create a edge list with the updated vertex ids
-    # 3- create the graph per se
-    j = 0
-    for r in vor.regions:
-        if len(r) == 0 or len(exclude.intersection(set(r))) > 0:
-            continue
+    for p in polys:
+        x, y = p.exterior.coords.xy
+        for xx, yy in zip(x, y):
+            coords.add((xx, yy))
 
-        m = len(r)
+    coords = np.array(list(coords))
+    # print(coords)
+    # input()
+    nvertices = len(coords)
+    coordsidx = {}
+    idx = 0
+    for i, c in enumerate(coords):
+        if c[0] not in coordsidx.keys(): coordsidx[c[0]] = {}
+        coordsidx[c[0]][c[1]] = i
+    edges = []
+    weights = []
 
+    for p in polys:
+        x, y = p.exterior.coords.xy
+        m = len(x)
         for i in range(m):
-            es[j, :] = [r[i], r[(i+1) % m]]
-            j += 1
-
-    es = list(es[:j, :])
-    xs = vor.vertices[:, 0]
-    ys = vor.vertices[:, 1]
-
-    valid = np.ones(xs.shape, dtype=bool)
-
-    invalid = list(exclude)
-    if -1 in invalid: invalid.remove(-1)
-
-    valid[invalid] = False
+            s = coordsidx[x[i]][y[i]]
+            j = (i+1)%m
+            t = coordsidx[x[j]][y[j]]
+            edges.append([s, t])
+            p1 = np.array([x[i], y[i]])
+            p2 = np.array([x[j], y[j]])
+            weights.append(np.linalg.norm(p1 - p2))
 
     vattrs = dict(
-        x = xs[valid],
-        y = ys[valid],
+        x = coords[:, 0],
+        y = coords[:, 1],
     )
-    # breakpoint()
-    
-    g = igraph.Graph(n, edges=es, directed=False, vertex_attrs=vattrs)
-    g.simplify()
-    g = g.components().giant()
 
-    print('g.vcount:{}'.format(g.vcount()))
-    print('g.ecount:{}'.format(g.ecount()))
-    coords = [[x,-y] for x,y in zip(g.vs['x'], g.vs['y'])]
-    return g, coords
+    eattrs = dict(
+        weight = weights
+    )
+    g = igraph.Graph(nvertices, edges)
+    g.simplify() # remove self-loops
+    g.vs['x'] = coords[:, 0]
+    g.vs['y'] = coords[:, 0]
+    g.es['weight'] = weights
+    igraph.plot(g, '/tmp/graph.pdf', layout=list(coords))
+    return g
 
-
+##########################################################
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--distrib', default='uniform', help='data distrib')
@@ -311,16 +281,18 @@ def main():
     logging.basicConfig(format='[%(asctime)s] %(message)s',
     datefmt='%Y%m%d %H:%M', level=logging.INFO)
 
-    np.random.seed(args.seed)
+    figs, axs = plt.subplots(1, 3, figsize=(35, 15))
 
-    nrows = 1;  ncols = 3
-    figscale = 5
-    fig, axs = plt.subplots(nrows, ncols, squeeze=False,
-                figsize=(ncols*figscale, nrows*figscale))
-
-    coords = np.array([[0, 0], [0, 1], [1, 1], [1, 0]])
-    mappoly = geometry.Polygon(coords)
-    bbox = np.array([0, 0, 1, 1])
+    # mappoly = load_map(args.shp)
+    mappoly = geometry.Polygon([
+        [0, 0],
+        [0, 1],
+        [1, 1],
+        [1, 0],
+    ])
+    # bbox = get_encbox_from_borders(mappoly)
+    bbox = [0, 0, 1, 1]
+    # df = pd.read_csv(args.pois) # Load seeds
 
     dim = 2
     samplesz = args.samplesz
@@ -352,43 +324,30 @@ def main():
         info('Please choose a distrib among ' \
              '[uniform, linear, quadratic, gaussian, exponential]')
         return
-
     vor = spatial.Voronoi(points) # Compute regular Voronoi
 
-    extvert = get_external_vertices(vor)
-    # print(vor.vertices)
-    # print(extvert)
-    # input()
-    polys = get_voronoi_bounded_polys(vor, exclude=extvert)
-    # print(len(polys))
+    spatial.voronoi_plot_2d(vor, ax=axs[0]) # Plot default unbounded voronoi
 
-    # extvert = set([-1])
-    # points = np.array([[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2],
-                       # [2, 0], [2, 1], [2, 2]])
-    # vor = spatial.Voronoi(points)
-
-    g, coords = create_graph_from_voronoi(vor, exclude=extvert)
-    igraph.plot(g, pjoin(args.outdir, 'graph.pdf'), layout=coords, autocurve=False,
-                # vertex_size
-                )
-    # return
-
-    spatial.voronoi_plot_2d(vor, ax=axs[0, 0])
-    plot_boxed_voronoi(axs[0, 1], vor, [0, 0, 1, 1])
-    plot_bounded_cells(axs[0, 2], polys)
-
+    cells = plot_boxed_voronoi(axs[1], vor, bbox)
+    polys = compute_cells_bounded_by_polygon(cells, mappoly)
+    g = create_graph_from_polys(polys)
+    n = g.vcount()
+    shortestpaths = np.array(g.shortest_paths(weights=g.es['weight']))
+    avgpathlength = (np.sum(shortestpaths)) / (n* (n - 1))
+    info('avgpathlength:{}'.format(avgpathlength))
+    
+    plot_bounded_cells(axs[2], polys)
     areas = [p.area for p in polys]
-
+    centroids = np.array([np.array(p.centroid.coords)[0] for p in polys])
+    orderedcentroids = centroids[vor.point_region-1] # Sort the region ids
+    centroidsdists = scipy.spatial.distance.cdist(centroids, points).diagonal()
+    #TODO: adjust above computation for the multiple polygons case
     areasmean = np.mean(areas)
     areasstd = np.std(areas)
-    # info('datamean:{}'.format(np.mean(points, 0)))
-    info('{:.3f}, {:.3f}, {:.3f}'.format(areasmean, areasstd, areasstd/areasmean))
-    # df = pd.DataFrame({'areasmean':areasmean, 'areasstd':areasstd,
-                       # 'centroidsdists':centroidsdists})
-
-    # z = np.argwhere(np.all(arr == querypoint, axis=1))[0]
-
-    # df.to_csv(pjoin(args.outdir, 'voronoi.csv'), header=True, index=False)
+    df = pd.DataFrame({'areasmean':areasmean, 'areasstd':areasstd,
+                       'centroidsdists':centroidsdists})
+    info('areas {:.3f} ({:.3f})'.format(areasmean, areasstd))
+    df.to_csv(pjoin(args.outdir, 'voronoi.csv'), header=True, index=False)
 
     plt.savefig(pjoin(args.outdir, 'voronoi.pdf'))
 
