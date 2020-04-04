@@ -5,6 +5,7 @@
 import argparse
 import logging
 from logging import debug, info
+import inspect
 import numpy as np
 import pandas as pd
 import scipy.spatial as spatial
@@ -25,6 +26,8 @@ import itertools
 # import os
 from os.path import join as pjoin
 import igraph
+from itertools import product
+from multiprocessing import Pool
 
 
 ##########################################################
@@ -270,86 +273,137 @@ def create_graph_from_polys(polys):
     return g
 
 ##########################################################
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--distrib', default='uniform', help='data distrib')
-    parser.add_argument('--samplesz', default=50, type=int, help='sample size')
-    parser.add_argument('--outdir', required=False, default='/tmp/', help='POIs in csv fmt')
-    parser.add_argument('--seed', default=0, type=int)
-    args = parser.parse_args()
+def generate_data_with_distrib(distrib, samplesz, dim, scaled=True):
+    """Generate data following the distrib and optionally between 0 and 1
 
-    logging.basicConfig(format='[%(asctime)s] %(message)s',
-    datefmt='%Y%m%d %H:%M', level=logging.INFO)
+    Args:
+    distrib(str): one of [uniform, quadratic, exponential]
 
-    figs, axs = plt.subplots(1, 3, figsize=(35, 15))
+    Returns:
+    data
+    """
+    info(inspect.stack()[0][3] + '()')
 
-    # mappoly = load_map(args.shp)
-    mappoly = geometry.Polygon([
-        [0, 0],
-        [0, 1],
-        [1, 1],
-        [1, 0],
-    ])
-    # bbox = get_encbox_from_borders(mappoly)
-    bbox = [0, 0, 1, 1]
-    # df = pd.read_csv(args.pois) # Load seeds
-
-    dim = 2
-    samplesz = args.samplesz
-
-    if args.distrib == 'exponential':
+    if distrib == 'exponential':
         points = np.random.exponential(size=(samplesz, dim))
         points /= (np.max(points, 0)*2) # 0--0.5
         points *= random_sign((samplesz, 2))
         points += np.ones(dim)*.5
-    elif args.distrib == 'linear':
+    elif distrib == 'linear':
         points = np.random.power(2, size=(samplesz, dim))
         points = 1 - points
         points /= 2 # 0--0.5
         points *= random_sign((samplesz, dim))
         points += np.ones(dim)*.5
-    elif args.distrib == 'quadratic':
+    elif distrib == 'quadratic':
         points = np.random.power(3, size=(samplesz, dim))
         points = 1 - points # we want decreasing prob
         points /= 2 # 0--0.5
         points *= random_sign((samplesz, dim))
         points += np.ones(dim)*.5
-    elif args.distrib == 'gaussian':
+    elif distrib == 'gaussian':
         points = np.random.normal([0, 0], scale=1, size=(samplesz, 2))
         points += np.abs(np.min(points, 0))
         points /= np.max(points, 0)
-    elif args.distrib == 'uniform':
+    elif distrib == 'uniform':
         points = np.random.rand(samplesz, 2)
     else:
         info('Please choose a distrib among ' \
              '[uniform, linear, quadratic, gaussian, exponential]')
-        return
-    vor = spatial.Voronoi(points) # Compute regular Voronoi
+        return []
+    return points
 
+##########################################################
+def generate_data(distribs, samplesz, dim, scaled=False):
+    """Generate data with different distributions
+
+    Args:
+    scaled(bool): whether we want to scale between 0 and 1
+
+    Returns:
+    dict: distrib as keys and np.ndarray as values
+    """
+    info(inspect.stack()[0][3] + '()')
+
+    data = {}
+    for d in distribs:
+        data[d] = generate_data_with_distrib(d, samplesz, dim, scaled=scaled)
+    return data
+##########################################################
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--distrib', default='uniform', help='data distrib')
+    parser.add_argument('--samplesz', default=50, type=int, help='sample size')
+    parser.add_argument('--nprocs', default=1, type=int, help='number of procs')
+    parser.add_argument('--nrealizations', default=3, type=int,
+                        help='number of procs')
+    parser.add_argument('--outdir', default='/tmp/', help='POIs in csv fmt')
+    args = parser.parse_args()
+
+    logging.basicConfig(format='[%(asctime)s] %(message)s',
+    datefmt='%Y%m%d %H:%M', level=logging.INFO)
+
+    dim = 2
+    samplesz = args.samplesz
+    scaled = True
+
+    distribs = ['uniform', 'gaussian', 'exponential']
+
+    seeds = list(range(args.nrealizations))
+    params = list(product(
+        distribs, [samplesz], [dim],
+        [scaled], seeds,
+        [args.outdir],
+    ))
+
+    if args.nprocs == 1:
+        ret = [run_experiment(p) for p in params]
+    else:
+        info('Running in parallel ({})'.format(args.nprocs))
+        pool = Pool(args.nprocs)
+        ret = pool.map(run_experiment, params)
+
+    print(ret)
+
+#############################################################
+def run_experiment(params_):
+    distrib, samplesz, dim, scaled, seed, outdir = params_
+    mappoly = geometry.Polygon([
+        [0, 0], [0, 1], [1, 1], [1, 0],
+    ])
+    bbox = [0, 0, 1, 1]
+    points = generate_data_with_distrib(distrib, samplesz, dim, scaled=scaled)
+
+    figs, axs = plt.subplots(1, 3, figsize=(35, 15))
+
+    vor = spatial.Voronoi(points) # Compute regular Voronoi
     spatial.voronoi_plot_2d(vor, ax=axs[0]) # Plot default unbounded voronoi
 
     cells = plot_boxed_voronoi(axs[1], vor, bbox)
     polys = compute_cells_bounded_by_polygon(cells, mappoly)
     g = create_graph_from_polys(polys)
-    n = g.vcount()
+    nnodes = g.vcount()
     shortestpaths = np.array(g.shortest_paths(weights=g.es['weight']))
-    avgpathlength = (np.sum(shortestpaths)) / (n* (n - 1))
-    info('avgpathlength:{}'.format(avgpathlength))
+    avgpathlength = (np.sum(shortestpaths)) / (nnodes* (nnodes - 1))
+    # info('avgpathlength:{}'.format(avgpathlength))
     
     plot_bounded_cells(axs[2], polys)
     areas = [p.area for p in polys]
     centroids = np.array([np.array(p.centroid.coords)[0] for p in polys])
     orderedcentroids = centroids[vor.point_region-1] # Sort the region ids
     centroidsdists = scipy.spatial.distance.cdist(centroids, points).diagonal()
-    #TODO: adjust above computation for the multiple polygons case
-    areasmean = np.mean(areas)
-    areasstd = np.std(areas)
-    df = pd.DataFrame({'areasmean':areasmean, 'areasstd':areasstd,
-                       'centroidsdists':centroidsdists})
-    info('areas {:.3f} ({:.3f})'.format(areasmean, areasstd))
-    df.to_csv(pjoin(args.outdir, 'voronoi.csv'), header=True, index=False)
 
-    plt.savefig(pjoin(args.outdir, 'voronoi.pdf'))
+    pref = '{}_{:03d}'.format(distrib, seed)
+    plt.savefig(pjoin(outdir, pref + '_voronoi.pdf'))
+    areascsv = pjoin(outdir, pref + '_results.csv')
+    fhcsv = open(areascsv, 'w')
+    fhcsv.write('{},{},{:.3f},{:.3f},{:.3f}'.format(distrib, len(areas),
+                                                    np.mean(areas),
+                                                    np.median(areas),
+                                                    np.std(areas),
+                                                    nnodes, avgpathlength))
+    fhcsv.close()
+    return areascsv
 
 if __name__ == "__main__":
     main()
