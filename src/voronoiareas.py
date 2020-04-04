@@ -209,7 +209,7 @@ def plot_polygon(ax, pol, c):
     z = list(zip(*pol.exterior.coords.xy))
     ax.add_patch(patches.Polygon(z, linewidth=2, edgecolor='r',
                                      facecolor=c))
-def plot_bounded_cells(ax, polys):
+def plot_bounded_cells(ax, polys, title):
     for pol in polys:
         if pol.geom_type == 'MultiPolygon':
             for polyg in pol.geoms:
@@ -217,7 +217,8 @@ def plot_bounded_cells(ax, polys):
         else:
             plot_polygon(ax, pol, np.random.rand(3,))
 
-    ax.autoscale_view()
+    ax.set_title(title)
+    # ax.autoscale_view()
 
 ##########################################################
 def random_sign(sampleshape):
@@ -329,6 +330,51 @@ def generate_data(distribs, samplesz, dim, scaled=False):
     for d in distribs:
         data[d] = generate_data_with_distrib(d, samplesz, dim, scaled=scaled)
     return data
+
+#############################################################
+def run_experiment(params_):
+    distrib, samplesz, dim, scaled, seed, outdir = params_
+    np.random.seed(seed)
+    pref = '{}_{:03d}'.format(distrib, seed)
+
+    mappoly = geometry.Polygon([
+        [0, 0], [0, 1], [1, 1], [1, 0],
+    ])
+    bbox = [0, 0, 1, 1]
+    points = generate_data_with_distrib(distrib, samplesz, dim, scaled=scaled)
+
+    figscale = 10
+    fig, axs = plt.subplots(figsize=(figscale, figscale))
+
+    vor = spatial.Voronoi(points) # Compute regular Voronoi
+    # spatial.voronoi_plot_2d(vor, ax=axs[0]) # Plot default unbounded voronoi
+
+    newvorvertices, newridgevertices = create_bounded_ridges(vor, bbox)
+    cells = get_boxed_polygons(vor, newvorvertices, newridgevertices, bbox)
+
+    polys = compute_cells_bounded_by_polygon(cells, mappoly)
+    g = create_graph_from_polys(polys)
+    nnodes = g.vcount()
+    shortestpaths = np.array(g.shortest_paths(weights=g.es['weight']))
+    avgpathlength = (np.sum(shortestpaths)) / (nnodes* (nnodes - 1))
+    
+    plot_bounded_cells(axs, polys, pref)
+    areas = [p.area for p in polys]
+    centroids = np.array([np.array(p.centroid.coords)[0] for p in polys])
+    orderedcentroids = centroids[vor.point_region-1] # Sort the region ids
+    centroidsdists = scipy.spatial.distance.cdist(centroids, points).diagonal()
+
+    plt.tight_layout()
+    plt.savefig(pjoin(outdir, pref + '_voronoi.pdf'))
+    areascsv = pjoin(outdir, pref + '_results.csv')
+    fhcsv = open(areascsv, 'w')
+    fhcsv.write('{},{},{},{:.3f},{:.3f},{:.3f},{},{:.3f}'.\
+            format(distrib, seed, len(areas), np.mean(areas),
+                np.median(areas), np.std(areas), nnodes,
+                avgpathlength))
+    fhcsv.close()
+    return areascsv
+
 ##########################################################
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -357,53 +403,25 @@ def main():
     ))
 
     if args.nprocs == 1:
-        ret = [run_experiment(p) for p in params]
+        respaths = [run_experiment(p) for p in params]
     else:
         info('Running in parallel ({})'.format(args.nprocs))
         pool = Pool(args.nprocs)
-        ret = pool.map(run_experiment, params)
+        respaths = pool.map(run_experiment, params)
 
-    print(ret)
+    # Double check correspondence in run_experiment
+    lines = ['distrib,seed,nareas,areasmean,areasmedian,areasstd,' \
+            'nvertices,avgpathlength']
 
-#############################################################
-def run_experiment(params_):
-    distrib, samplesz, dim, scaled, seed, outdir = params_
-    mappoly = geometry.Polygon([
-        [0, 0], [0, 1], [1, 1], [1, 0],
-    ])
-    bbox = [0, 0, 1, 1]
-    points = generate_data_with_distrib(distrib, samplesz, dim, scaled=scaled)
+    for respath in respaths:
+        lines.append(open(respath).read())
 
-    figs, axs = plt.subplots(1, 3, figsize=(35, 15))
+    fh = open(pjoin(args.outdir, 'results.csv'), 'w')
+    fh.write('\n'.join(lines))
+    fh.close()
+    df = pd.read_csv(pjoin(args.outdir, 'results.csv'))
+    info(df.describe)
 
-    vor = spatial.Voronoi(points) # Compute regular Voronoi
-    spatial.voronoi_plot_2d(vor, ax=axs[0]) # Plot default unbounded voronoi
-
-    cells = plot_boxed_voronoi(axs[1], vor, bbox)
-    polys = compute_cells_bounded_by_polygon(cells, mappoly)
-    g = create_graph_from_polys(polys)
-    nnodes = g.vcount()
-    shortestpaths = np.array(g.shortest_paths(weights=g.es['weight']))
-    avgpathlength = (np.sum(shortestpaths)) / (nnodes* (nnodes - 1))
-    # info('avgpathlength:{}'.format(avgpathlength))
-    
-    plot_bounded_cells(axs[2], polys)
-    areas = [p.area for p in polys]
-    centroids = np.array([np.array(p.centroid.coords)[0] for p in polys])
-    orderedcentroids = centroids[vor.point_region-1] # Sort the region ids
-    centroidsdists = scipy.spatial.distance.cdist(centroids, points).diagonal()
-
-    pref = '{}_{:03d}'.format(distrib, seed)
-    plt.savefig(pjoin(outdir, pref + '_voronoi.pdf'))
-    areascsv = pjoin(outdir, pref + '_results.csv')
-    fhcsv = open(areascsv, 'w')
-    fhcsv.write('{},{},{:.3f},{:.3f},{:.3f}'.format(distrib, len(areas),
-                                                    np.mean(areas),
-                                                    np.median(areas),
-                                                    np.std(areas),
-                                                    nnodes, avgpathlength))
-    fhcsv.close()
-    return areascsv
-
+##########################################################
 if __name__ == "__main__":
     main()
