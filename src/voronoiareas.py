@@ -274,7 +274,7 @@ def create_graph_from_polys(polys):
     return g
 
 ##########################################################
-def generate_data_with_distrib(distrib, samplesz, dim, scaled=True):
+def generate_data_with_distrib(distrib, samplesz, dim, scale=1):
     """Generate data following the distrib and optionally between 0 and 1
 
     Args:
@@ -312,7 +312,7 @@ def generate_data_with_distrib(distrib, samplesz, dim, scaled=True):
         info('Please choose a distrib among ' \
              '[uniform, linear, quadratic, gaussian, exponential]')
         return []
-    return points
+    return points * scale
 
 ##########################################################
 def generate_data(distribs, samplesz, dim, scaled=False):
@@ -328,12 +328,12 @@ def generate_data(distribs, samplesz, dim, scaled=False):
 
     data = {}
     for d in distribs:
-        data[d] = generate_data_with_distrib(d, samplesz, dim, scaled=scaled)
+        data[d] = generate_data_with_distrib(d, samplesz, dim, scale=scale)
     return data
 
 #############################################################
 def run_experiment(params_):
-    distrib, samplesz, dim, scaled, seed, outdir = params_
+    distrib, samplesz, dim, scale, seed, outdir = params_
     np.random.seed(seed)
     pref = '{}_{:03d}'.format(distrib, seed)
 
@@ -341,7 +341,8 @@ def run_experiment(params_):
         [0, 0], [0, 1], [1, 1], [1, 0],
     ])
     bbox = [0, 0, 1, 1]
-    points = generate_data_with_distrib(distrib, samplesz, dim, scaled=scaled)
+    points = generate_data_with_distrib(distrib, samplesz, dim, scale=scale)
+    pointsstd = np.std(points)
 
     figscale = 10
     fig, axs = plt.subplots(figsize=(figscale, figscale))
@@ -366,14 +367,16 @@ def run_experiment(params_):
 
     plt.tight_layout()
     plt.savefig(pjoin(outdir, pref + '_voronoi.pdf'))
+    
     areascsv = pjoin(outdir, pref + '_results.csv')
     fhcsv = open(areascsv, 'w')
-    fhcsv.write('{},{},{},{:.3f},{:.3f},{:.3f},{},{:.3f}'.\
-            format(distrib, seed, len(areas), np.mean(areas),
-                np.median(areas), np.std(areas), nnodes,
+    # lines = ['distrib,seed,pointsstd,nareas,areasmean,areasmedian,areasstd,' \
+    fhcsv.write('{},{},{},{},{},{},{},{},{},{}'.\
+            format(distrib, seed, pointsstd, len(areas), np.mean(areas),
+                np.median(areas), np.std(areas), nnodes, np.mean(g.degree()),
                 avgpathlength))
     fhcsv.close()
-    return areascsv
+    return [areascsv]
 
 ##########################################################
 def main():
@@ -391,14 +394,14 @@ def main():
 
     dim = 2
     samplesz = args.samplesz
-    scaled = True
+    scale = 1
 
     distribs = ['uniform', 'gaussian', 'exponential']
 
     seeds = list(range(args.nrealizations))
     params = list(product(
         distribs, [samplesz], [dim],
-        [scaled], seeds,
+        [scale], seeds,
         [args.outdir],
     ))
 
@@ -410,16 +413,18 @@ def main():
         respaths = pool.map(run_experiment, params)
 
     # Double check correspondence in run_experiment
-    lines = ['distrib,seed,nareas,areasmean,areasmedian,areasstd,' \
-            'nvertices,avgpathlength']
+    lines = ['distrib,seed,pointsstd,nareas,areasmean,areasmedian,areasstd,' \
+            'nvertices,avgdegree,avgpathlength']
 
-    for respath in respaths:
-        lines.append(open(respath).read())
+    for aux in respaths:
+        for respath in aux:
+            lines.append(open(respath).read())
 
     fh = open(pjoin(args.outdir, 'results.csv'), 'w')
     fh.write('\n'.join(lines))
     fh.close()
     df = pd.read_csv(pjoin(args.outdir, 'results.csv'))
+    info(df.areasstd / df.areasmean)
     info(df.describe)
 
 ##########################################################
